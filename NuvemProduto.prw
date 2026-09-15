@@ -41,6 +41,8 @@ CLASS NuvemProduto FROM NuvemAcesso
 	METHOD GetOrCreateCategory(cCatName)
 	METHOD ExportProduct(cCodProd, lForce)
 	METHOD ExportAllB2C(cFilialP, bProgress)
+	METHOD SyncStockPrice(cCodProd)
+	METHOD SyncAllStockPriceB2C(cFilialP, bProgress)
 	METHOD GravaIdWEB(cCodProd, cProdId, cVarId)
 
 ENDCLASS
@@ -913,14 +915,6 @@ METHOD UpdtAtuWeb() CLASS NuvemProduto
 	Local nCont     := 0
 	Local cProduto  := ""
 	Local nRecVTF   := 0
-	Local cVarId    := ""
-	Local cProdId   := ""
-	Local nPreco    := 0
-	Local nEstoque  := 0
-	Local cBodyVar  := ""
-	Local oData     := Nil
-	Local oRespVar  := Nil
-	Local cFilEcom  := AllTrim(cValToChar(SuperGetMV("MV_NUVFIL", .F., "03150001")))
 
 	cQuery := "SELECT VTF.R_E_C_N_O_ AS RECVTF, VTF.VTF_PRODUT, VTF.VTF_TABELA "
 	cQuery += " FROM " + RetSqlName("VTF") + " VTF "
@@ -934,61 +928,27 @@ METHOD UpdtAtuWeb() CLASS NuvemProduto
 	While !(cAliasVTF)->(Eof())
 		cProduto := AllTrim((cAliasVTF)->VTF_PRODUT)
 		nRecVTF  := (cAliasVTF)->RECVTF
-		cVarId   := ::GetVariantId(cProduto)
-		cProdId  := ::GetProductId(cProduto)
 
-		If !Empty(cVarId) .And. !Empty(cProdId)
-			// Coleta dados comerciais completos com fallbacks de preco e saldo disponivel
-			oData := ::GetDadosProd(cProduto)
-			If oData != Nil
-				nPreco   := oData["preco"]
-				nEstoque := oData["estoque"]
-				FreeObj(oData)
-			EndIf
-
-			cBodyVar := '{'
-			cBodyVar += '  "price": "' + AllTrim(Str(nPreco, 12, 2)) + '",'
-			cBodyVar += '  "stock": ' + cValToChar(nEstoque)
-			cBodyVar += '}'
-
-			oRespVar := ::UpdateVariant(Val(cProdId), Val(cVarId), cBodyVar)
-			If oRespVar != Nil
-				dbSelectArea("VTF")
-				VTF->(dbGoTo(nRecVTF))
-				RecLock("VTF", .F.)
-				VTF->VTF_ATUWEB := "N"
-				VTF->(MsUnLock())
-				nCont++
-				ConOut("[NUVEMSHOP] Fila VTF: Produto " + cProduto + " atualizado na Nuvemshop (Preco R$ " + AllTrim(Str(nPreco, 12, 2)) + " / Est " + cValToChar(nEstoque) + ")")
-				FreeObj(oRespVar)
-			Else
-				ConOut("[NUVEMSHOP][ERRO] Fila VTF: Falha ao atualizar variante " + cVarId + " do produto " + cProduto)
-			EndIf
-		Else
-			// Sem vinculo na Nuvemshop -> verifica se eh produto B2C para cadastrar automaticamente
-			If ChkFile("SBZ")
-				DbSelectArea("SBZ")
-				SBZ->(DbSetOrder(1))
-				If (SBZ->(DbSeek(cFilEcom + cProduto)) .Or. ;
-				    SBZ->(DbSeek(SubStr(cFilEcom, 1, 4) + cProduto)) .Or. ;
-				    SBZ->(DbSeek(xFilial("SBZ") + cProduto))) .And. ;
-				   SBZ->(FieldPos("BZ_YB2C")) > 0 .And. Upper(AllTrim(SBZ->BZ_YB2C)) == "S"
-					ConOut("[NUVEMSHOP] Fila VTF: Produto B2C " + cProduto + " sem vinculo. Realizando primeiro cadastro na Nuvemshop...")
-					If ::ExportProduct(cProduto, .T.)
-						nCont++
-					EndIf
-				Else
-					ConOut("[NUVEMSHOP][AVISO] Fila VTF: Produto " + cProduto + " sem vinculo e nao marcado como B2C (SBZ->BZ_YB2C). Baixando da fila.")
-				EndIf
-			Else
-				ConOut("[NUVEMSHOP][AVISO] Fila VTF: Produto " + cProduto + " sem vinculo nas tabelas VT9/VTD. Baixando da fila.")
-			EndIf
-
+		// Executa a sincronizacao de estoque e preco com auto-binding por SKU (Match VTEX)
+		If ::SyncStockPrice(cProduto)
 			dbSelectArea("VTF")
 			VTF->(dbGoTo(nRecVTF))
 			RecLock("VTF", .F.)
 			VTF->VTF_ATUWEB := "N"
 			VTF->(MsUnLock())
+			nCont++
+		Else
+			// Se o SKU ainda nao existe na Nuvemshop (404), baixa da fila para nao travar o schedule
+			If ::nLastStatus == 404
+				ConOut("[NUVEMSHOP][AVISO] Fila VTF: SKU " + cProduto + " ainda nao cadastrado na Nuvemshop pela VTEX (404). Baixando da fila.")
+				dbSelectArea("VTF")
+				VTF->(dbGoTo(nRecVTF))
+				RecLock("VTF", .F.)
+				VTF->VTF_ATUWEB := "N"
+				VTF->(MsUnLock())
+			Else
+				ConOut("[NUVEMSHOP][ERRO] Fila VTF: Falha temporaria ao sincronizar SKU " + cProduto + ". Permanecera na fila.")
+			EndIf
 		EndIf
 
 		(cAliasVTF)->(dbSkip())
@@ -1177,5 +1137,220 @@ METHOD ExportAllB2C(cFilialP, bProgress) CLASS NuvemProduto
 	oResult["sucessos"] := nSucessos
 	oResult["erros"]    := nErros
 	oResult["falhas"]   := aFalhas
+
+Return oResult
+
+/*/{Protheus.doc} SyncStockPrice
+Sincroniza pontualmente o estoque e preco de um produto na Nuvemshop
+utilizando a estrategia de busca por SKU (Auto-binding):
+1. Se o produto ja possuir vinculo no de-para (VT9/VTD), usa os IDs direto.
+2. Se ainda nao possuir vinculo, consulta a Nuvemshop via GET /products/sku/{sku}.
+3. Localizado o produto (subido previamente pela VTEX), amarra os IDs no VT9/VTD.
+4. Envia os dados transacionais de Preco e Saldo da filial B2C configurada.
+
+@param cCodProd, character, Codigo do produto no Protheus (B1_COD / RefId)
+@return lOk, logical, .T. se atualizado com sucesso, .F. caso contrario
+/*/
+METHOD SyncStockPrice(cCodProd) CLASS NuvemProduto
+	Local cVarId    := ""
+	Local cProdId   := ""
+	Local oCheckSku := Nil
+	Local oData     := Nil
+	Local nPreco    := 0
+	Local nEstoque  := 0
+	Local cBodyVar  := ""
+	Local oRespVar  := Nil
+	Local lOk       := .F.
+
+	cCodProd := AllTrim(cCodProd)
+	If Empty(cCodProd)
+		Return .F.
+	EndIf
+
+	// 1. Verifica se ja possui de-para no Protheus (VT9/VTD)
+	cVarId  := ::GetVariantId(cCodProd)
+	cProdId := ::GetProductId(cCodProd)
+
+	// 2. Se nao possui de-para, executa a Descoberta Automatica por SKU (Match com carga VTEX)
+	If Empty(cVarId) .Or. Empty(cProdId)
+		ConOut("[NUVEMSHOP][AUTO-BIND] Produto " + cCodProd + " sem vinculo local. Consultando SKU na Nuvemshop...")
+		oCheckSku := ::CheckSku(cCodProd)
+
+		If oCheckSku != Nil
+			cProdId := cValToChar(oCheckSku["id"])
+			If ValType(oCheckSku["variants"]) == "A" .And. Len(oCheckSku["variants"]) > 0
+				cVarId := cValToChar(oCheckSku["variants"][1]["id"])
+			EndIf
+
+			If !Empty(cProdId) .And. !Empty(cVarId)
+				// Grava o vínculo no de-para do Protheus
+				::GravaIdWEB(cCodProd, cProdId, cVarId)
+				ConOut("[NUVEMSHOP][AUTO-BIND] Vinculo gravado com sucesso para o SKU " + cCodProd + ": ProdID " + cProdId + " / VarID " + cVarId)
+			EndIf
+			FreeObj(oCheckSku)
+		Else
+			If ::nLastStatus == 404
+				ConOut("[NUVEMSHOP][AGUARDANDO VTEX] SKU " + cCodProd + " nao encontrado na Nuvemshop (404). Aguardando publicacao do catalogo pela VTEX.")
+			Else
+				ConOut("[NUVEMSHOP][ERRO] Falha ao consultar SKU " + cCodProd + ": " + ::GetLastError())
+			EndIf
+			Return .F.
+		EndIf
+	EndIf
+
+	If Empty(cProdId) .Or. Empty(cVarId)
+		Return .F.
+	EndIf
+
+	// 3. Coleta dados de Preco e Saldo da filial de e-commerce
+	oData := ::GetDadosProd(cCodProd)
+	If oData != Nil
+		nPreco   := oData["preco"]
+		nEstoque := oData["estoque"]
+		FreeObj(oData)
+	EndIf
+
+	// 4. Envia atualizacao leve para a variante
+	cBodyVar := '{'
+	cBodyVar += '  "price": "' + AllTrim(Str(nPreco, 12, 2)) + '",'
+	cBodyVar += '  "stock": ' + cValToChar(nEstoque)
+	cBodyVar += '}'
+
+	oRespVar := ::UpdateVariant(Val(cProdId), Val(cVarId), cBodyVar)
+	If oRespVar != Nil
+		lOk := .T.
+		ConOut("[NUVEMSHOP][ESTOQUE/PRECO] SKU " + cCodProd + " atualizado: Preco R$ " + AllTrim(Str(nPreco, 12, 2)) + " / Est " + cValToChar(nEstoque))
+		FreeObj(oRespVar)
+	Else
+		ConOut("[NUVEMSHOP][ERRO] Falha ao atualizar estoque/preco da variante " + cVarId + " do SKU " + cCodProd + ": " + ::GetLastError())
+	EndIf
+
+Return lOk
+
+/*/{Protheus.doc} SyncAllStockPriceB2C
+Executa a sincronizacao em lote de Estoque e Preco para todos os produtos B2C
+(SBZ->BZ_YB2C = 'S') fazendo o casamento automatico por SKU com o catalogo da VTEX.
+
+@param cFilialP, character, Filial de estoque/preco a considerar (opcional, padrao MV_NUVFIL)
+@param bProgress, block, Bloco de codigo opcional para callback de progresso:
+                  Eval(bProgress, nAtual, nTotal, cCodProd, lOk, cMsg)
+@return oResult, JsonObject, Objeto com estatisticas: total, sucessos, erros, aguardando_vtex, falhas
+/*/
+METHOD SyncAllStockPriceB2C(cFilialP, bProgress) CLASS NuvemProduto
+	Local cFilEcom   := ""
+	Local cQuery     := ""
+	Local cAliasQry  := GetNextAlias()
+	Local aProdutos  := {}
+	Local aFalhas    := {}
+	Local nTotal     := 0
+	Local nSucessos  := 0
+	Local nErros     := 0
+	Local nNaoCad    := 0
+	Local nI         := 0
+	Local cCodProd   := ""
+	Local lOk        := .F.
+	Local oResult    := JsonObject():New()
+	Local cMsgErr    := ""
+
+	Default cFilialP := AllTrim(cValToChar(SuperGetMV("MV_NUVFIL", .F., "03150001")))
+	cFilEcom := cFilialP
+	If Empty(cFilEcom)
+		cFilEcom := cFilAnt
+	EndIf
+
+	ConOut("[NUVEMSHOP][SINCRONIZACAO ESTOQUE/PRECO B2C] Iniciando filial: " + cFilEcom)
+
+	// Valida se a tabela SBZ e o campo BZ_YB2C existem no dicionario
+	If !ChkFile("SBZ")
+		ConOut("[NUVEMSHOP][ERRO] Tabela SBZ (Indicadores de Produto) nao encontrada.")
+		oResult["total"]          := 0
+		oResult["sucessos"]       := 0
+		oResult["erros"]          := 1
+		oResult["aguardando_vtex"]:= 0
+		oResult["falhas"]         := {{"SBZ", "Tabela SBZ nao encontrada no ambiente"}}
+		Return oResult
+	EndIf
+
+	DbSelectArea("SBZ")
+	If SBZ->(FieldPos("BZ_YB2C")) == 0
+		ConOut("[NUVEMSHOP][ERRO] Campo BZ_YB2C nao encontrado na tabela SBZ.")
+		oResult["total"]          := 0
+		oResult["sucessos"]       := 0
+		oResult["erros"]          := 1
+		oResult["aguardando_vtex"]:= 0
+		oResult["falhas"]         := {{"SBZ", "Campo BZ_YB2C nao existe na SBZ"}}
+		Return oResult
+	EndIf
+
+	// Montagem da query de selecao de produtos B2C
+	cQuery := "SELECT DISTINCT SB1.B1_COD "
+	cQuery += " FROM " + RetSqlName("SB1") + " SB1 "
+	cQuery += " INNER JOIN " + RetSqlName("SBZ") + " SBZ "
+	cQuery += "    ON SBZ.BZ_COD = SB1.B1_COD "
+	cQuery += "   AND (SBZ.BZ_FILIAL = '" + cFilEcom + "' OR SBZ.BZ_FILIAL = '" + SubStr(cFilEcom, 1, 4) + "' OR SBZ.BZ_FILIAL = '" + xFilial("SBZ") + "' OR SBZ.BZ_FILIAL = ' ') "
+	cQuery += "   AND (SBZ.BZ_YB2C = 'S' OR SBZ.BZ_YB2C = 's') "
+	cQuery += "   AND SBZ.D_E_L_E_T_ = ' ' "
+	cQuery += " WHERE SB1.D_E_L_E_T_ = ' ' "
+	cQuery += "   AND (SB1.B1_FILIAL = '" + xFilial("SB1") + "' OR SB1.B1_FILIAL = '" + cFilEcom + "' OR SB1.B1_FILIAL = '" + SubStr(cFilEcom, 1, 4) + "' OR SB1.B1_FILIAL = ' ') "
+	cQuery += "   AND (SB1.B1_MSBLQL <> '1' OR SB1.B1_MSBLQL = ' ' OR SB1.B1_MSBLQL IS NULL) "
+	cQuery += " ORDER BY SB1.B1_COD "
+
+	cQuery := ChangeQuery(cQuery)
+	dbUseArea(.T., "TOPCONN", TcGenQry(,, cQuery), cAliasQry, .F., .T.)
+
+	While !(cAliasQry)->(Eof())
+		AAdd(aProdutos, AllTrim((cAliasQry)->B1_COD))
+		(cAliasQry)->(dbSkip())
+	EndDo
+	(cAliasQry)->(dbCloseArea())
+
+	nTotal := Len(aProdutos)
+	ConOut("[NUVEMSHOP][SINCRONIZACAO ESTOQUE/PRECO B2C] Total de produtos B2C identificados na filial " + cFilEcom + ": " + cValToChar(nTotal))
+
+	If nTotal == 0
+		oResult["total"]          := 0
+		oResult["sucessos"]       := 0
+		oResult["erros"]          := 0
+		oResult["aguardando_vtex"]:= 0
+		oResult["falhas"]         := {}
+		Return oResult
+	EndIf
+
+	// Processa cada produto da lista
+	For nI := 1 To nTotal
+		cCodProd := aProdutos[nI]
+
+		lOk := ::SyncStockPrice(cCodProd)
+
+		If lOk
+			nSucessos++
+			cMsgErr := "OK"
+		Else
+			If ::nLastStatus == 404
+				nNaoCad++
+				cMsgErr := "Aguardando cadastro VTEX (404)"
+			Else
+				nErros++
+				cMsgErr := ::GetLastError()
+				AAdd(aFalhas, {cCodProd, cMsgErr})
+			EndIf
+		EndIf
+
+		// Callback de progresso
+		If bProgress != Nil
+			Eval(bProgress, nI, nTotal, cCodProd, lOk, cMsgErr)
+		EndIf
+
+		// Respeita rate limit
+		Sleep(400)
+	Next nI
+
+	ConOut("[NUVEMSHOP][SINCRONIZACAO ESTOQUE/PRECO B2C] Finalizado! Total: " + cValToChar(nTotal) + " Sucessos: " + cValToChar(nSucessos) + " Aguardando VTEX: " + cValToChar(nNaoCad) + " Erros: " + cValToChar(nErros))
+
+	oResult["total"]          := nTotal
+	oResult["sucessos"]       := nSucessos
+	oResult["erros"]          := nErros
+	oResult["aguardando_vtex"]:= nNaoCad
+	oResult["falhas"]         := aFalhas
 
 Return oResult

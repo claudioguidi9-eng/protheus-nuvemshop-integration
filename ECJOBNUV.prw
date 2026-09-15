@@ -79,10 +79,10 @@ Static Function ECJOBNUV1(cUsaFil, cFil)
 	// 1. Dispara a sincronizacao da fila VTF (precos e estoques em tempo real)
 	oNuvProd:UpdtAtuWeb()
 
-	// 2. Se configurado JOB_NUVCAT = .T., executa a sincronizacao B2C (SBZ->BZ_YB2C = 'S')
+	// 2. Se configurado JOB_NUVCAT = .T., executa a sincronizacao de precos/estoques B2C (Match VTEX)
 	If lSyncCat
-		ConOut("[ECJOBNUV] Executando sincronizacao de catalogo B2C agendada na filial " + cFil + "...")
-		oNuvProd:ExportAllB2C(cFil)
+		ConOut("[ECJOBNUV] Executando sincronizacao de estoque e preco B2C agendada na filial " + cFil + "...")
+		oNuvProd:SyncAllStockPriceB2C(cFil)
 	EndIf
 
 	FreeObj(oNuvProd)

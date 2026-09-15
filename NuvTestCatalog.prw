@@ -33,6 +33,8 @@ User Function NuvTestCatalog()
 	Local oBtn5     := Nil
 	Local oBtn6     := Nil
 	Local oBtn7     := Nil
+	Local oBtn8     := Nil
+	Local oBtn9     := Nil
 	Local oBtnSair  := Nil
 	Local nI        := 0
 	Local nJ        := 0
@@ -58,19 +60,21 @@ User Function NuvTestCatalog()
 		Return .F.
 	EndIf
 
-	DEFINE MSDIALOG oDlg TITLE "Testes Nuvemshop - Fortbras" FROM 0, 0 TO 400, 480 PIXEL
+	DEFINE MSDIALOG oDlg TITLE "Testes Nuvemshop - Fortbras" FROM 0, 0 TO 450, 500 PIXEL
 
-	@ 010, 015 SAY "Selecione o teste de catalogo Nuvemshop desejado:" SIZE 220, 10 PIXEL OF oDlg
+	@ 010, 015 SAY "Selecione o teste de integracao Nuvemshop desejado:" SIZE 230, 10 PIXEL OF oDlg
 
-	@ 025, 015 BUTTON oBtn1 PROMPT "1. Consultar SKU na Nuvemshop (GET /products/sku)" SIZE 210, 16 PIXEL OF oDlg ACTION (nOpcao := 1, oDlg:End())
-	@ 045, 015 BUTTON oBtn2 PROMPT "2. Visualizar Dados Protheus Coletados (SB1, SB5, Z08, SBZ)" SIZE 210, 16 PIXEL OF oDlg ACTION (nOpcao := 2, oDlg:End())
-	@ 065, 015 BUTTON oBtn3 PROMPT "3. Exportar Produto Piloto para Nuvemshop" SIZE 210, 16 PIXEL OF oDlg ACTION (nOpcao := 3, oDlg:End())
-	@ 085, 015 BUTTON oBtn4 PROMPT "4. Executar Sincronizacao de Estoque/Preco (Fila VTF)" SIZE 210, 16 PIXEL OF oDlg ACTION (nOpcao := 4, oDlg:End())
-	@ 105, 015 BUTTON oBtn5 PROMPT "5. Enfileirar Produto na VTF (Simular Mudanca de Saldo)" SIZE 210, 16 PIXEL OF oDlg ACTION (nOpcao := 5, oDlg:End())
-	@ 125, 015 BUTTON oBtn6 PROMPT "6. Disparar Evento ao Painel de Monitoramento (MV_XURLMON)" SIZE 210, 16 PIXEL OF oDlg ACTION (nOpcao := 6, oDlg:End())
-	@ 145, 015 BUTTON oBtn7 PROMPT "7. Carga Total de Produtos B2C (SBZ->BZ_YB2C = 'S')" SIZE 210, 16 PIXEL OF oDlg ACTION (nOpcao := 7, oDlg:End())
+	@ 025, 015 BUTTON oBtn1 PROMPT "1. Consultar SKU na Nuvemshop (GET /products/sku)" SIZE 225, 15 PIXEL OF oDlg ACTION (nOpcao := 1, oDlg:End())
+	@ 043, 015 BUTTON oBtn2 PROMPT "2. Visualizar Dados Protheus Coletados (SB1, SB5, Z08, SBZ)" SIZE 225, 15 PIXEL OF oDlg ACTION (nOpcao := 2, oDlg:End())
+	@ 061, 015 BUTTON oBtn3 PROMPT "3. Exportar Produto Piloto (Carga Completa Protheus)" SIZE 225, 15 PIXEL OF oDlg ACTION (nOpcao := 3, oDlg:End())
+	@ 079, 015 BUTTON oBtn4 PROMPT "4. Executar Sincronizacao Fila VTF (Auto-bind por SKU)" SIZE 225, 15 PIXEL OF oDlg ACTION (nOpcao := 4, oDlg:End())
+	@ 097, 015 BUTTON oBtn5 PROMPT "5. Enfileirar Produto na VTF (Simular Mudanca de Saldo)" SIZE 225, 15 PIXEL OF oDlg ACTION (nOpcao := 5, oDlg:End())
+	@ 115, 015 BUTTON oBtn6 PROMPT "6. Disparar Evento ao Painel de Monitoramento (MV_XURLMON)" SIZE 225, 15 PIXEL OF oDlg ACTION (nOpcao := 6, oDlg:End())
+	@ 133, 015 BUTTON oBtn7 PROMPT "7. Carga Total de Catalogo B2C (SBZ->BZ_YB2C = 'S')" SIZE 225, 15 PIXEL OF oDlg ACTION (nOpcao := 7, oDlg:End())
+	@ 151, 015 BUTTON oBtn8 PROMPT "8. Sincronizar Estoque/Preco por SKU (Match VTEX)" SIZE 225, 15 PIXEL OF oDlg ACTION (nOpcao := 8, oDlg:End())
+	@ 169, 015 BUTTON oBtn9 PROMPT "9. Sincronizacao em Lote Estoque/Preco B2C (Match VTEX)" SIZE 225, 15 PIXEL OF oDlg ACTION (nOpcao := 9, oDlg:End())
 
-	@ 170, 160 BUTTON oBtnSair PROMPT "Cancelar / Fechar" SIZE 65, 14 PIXEL OF oDlg ACTION (nOpcao := 0, oDlg:End())
+	@ 194, 175 BUTTON oBtnSair PROMPT "Cancelar / Fechar" SIZE 65, 14 PIXEL OF oDlg ACTION (nOpcao := 0, oDlg:End())
 
 	ACTIVATE MSDIALOG oDlg CENTERED
 
@@ -316,6 +320,83 @@ User Function NuvTestCatalog()
 					MsgAlert(cMsg, "Carga B2C Finalizada com Alertas")
 				Else
 					MsgInfo(cMsg, "Carga B2C Nuvemshop com Sucesso")
+				EndIf
+				FreeObj(oRes)
+			EndIf
+		EndIf
+
+	Case nOpcao == 8
+		// 8. Sincronizar Estoque/Preco por SKU (Match Catalogo VTEX)
+		cCodProd := AllTrim(FWInputBox("Informe o codigo do produto (SKU VTEX) para sincronizar:", "104319"))
+		If Empty(cCodProd)
+			cCodProd := "104319"
+		EndIf
+
+		ConOut("[NUVEMSHOP TESTE] Sincronizando estoque e preco por SKU: " + AllTrim(cCodProd))
+		lOk := oProd:SyncStockPrice(AllTrim(cCodProd))
+
+		If lOk
+			oData := oProd:GetDadosProd(AllTrim(cCodProd))
+			cMsg := "ESTOQUE E PRECO SINCRONIZADOS COM SUCESSO!" + CRLF + CRLF
+			cMsg += "Codigo SKU / Protheus: " + AllTrim(cCodProd) + CRLF
+			cMsg += "ID Nuvemshop: " + oProd:GetProductId(AllTrim(cCodProd)) + CRLF
+			cMsg += "Variante ID: " + oProd:GetVariantId(AllTrim(cCodProd)) + CRLF + CRLF
+			If oData != Nil
+				cMsg += "Preco Atualizado: R$ " + Transform(oData["preco"], "@E 999,999.99") + CRLF
+				cMsg += "Estoque Disponivel: " + cValToChar(oData["estoque"]) + " un" + CRLF
+				FreeObj(oData)
+			EndIf
+			cMsg += CRLF + "Vinculo gravado com sucesso no de-para (VT9 e VTD)."
+			MsgInfo(cMsg, "Sucesso Sincronizacao VTEX Match")
+		Else
+			If oProd:nLastStatus == 404
+				MsgAlert("O produto SKU [" + AllTrim(cCodProd) + "] ainda NAO existe na Nuvemshop (HTTP 404)." + CRLF + CRLF + ;
+				         "Isso significa que a VTEX ainda nao realizou a publicacao do catalogo deste produto." + CRLF + ;
+				         "Assim que a VTEX subir o item, o Protheus fara o vinculo e atualizara estoque/preco automaticamente.", "Aguardando Publicacao VTEX")
+			Else
+				MsgStop("Falha ao sincronizar produto: " + oProd:GetLastError(), "Erro de Sincronizacao")
+			EndIf
+		EndIf
+
+	Case nOpcao == 9
+		// 9. Sincronizacao em Lote Estoque/Preco B2C (Match Catalogo VTEX)
+		cFilEcom := AllTrim(cValToChar(SuperGetMV("MV_NUVFIL", .F., "03150001")))
+		cFilEcom := AllTrim(FWInputBox("Informe a Filial de Estoque/Preco (SBZ):", cFilEcom))
+		If Empty(cFilEcom)
+			cFilEcom := "03150001"
+		EndIf
+
+		cMsgPrompt := "SINCRONIZACAO DE ESTOQUE E PRECO B2C (MATCH VTEX)" + CRLF + CRLF
+		cMsgPrompt += "Filial selecionada: " + cFilEcom + CRLF
+		cMsgPrompt += "Regra de Filtro: SBZ.BZ_YB2C = 'S' e SB1.B1_MSBLQL != '1'" + CRLF
+		cMsgPrompt += "Estrategia: Busca por SKU criado pela VTEX + Injecao de Saldo/Preco Protheus" + CRLF + CRLF
+		cMsgPrompt += "Deseja iniciar a sincronizacao agora?"
+
+		If MsgYesNo(cMsgPrompt, "Sincronizacao de Estoque/Preco B2C")
+			oRes := Nil
+			Processa({|lEnd| ;
+				oRes := oProd:SyncAllStockPriceB2C(cFilEcom, {|nAtual, nTotal, cCod, lOkProd, cErr| ;
+					ProcRegua(nTotal), ;
+					IncProc("Sincronizando " + cValToChar(nAtual) + "/" + cValToChar(nTotal) + ": SKU " + cCod) ;
+				}) ;
+			}, "Sincronizacao B2C Nuvemshop", "Localizando SKUs e atualizando precos/saldos...", .F.)
+
+			If oRes != Nil
+				cMsg := "SINCRONIZACAO B2C FINALIZADA!" + CRLF + CRLF
+				cMsg += "Filial: " + cFilEcom + CRLF
+				cMsg += "Total de produtos B2C no Protheus: " + cValToChar(oRes["total"]) + CRLF
+				cMsg += "Sincronizados com Sucesso: " + cValToChar(oRes["sucessos"]) + CRLF
+				cMsg += "Aguardando Cadastro na VTEX (404): " + cValToChar(oRes["aguardando_vtex"]) + CRLF
+				cMsg += "Erros / Falhas de Comunicacao: " + cValToChar(oRes["erros"]) + CRLF
+
+				If oRes["erros"] > 0 .And. ValType(oRes["falhas"]) == "A" .And. Len(oRes["falhas"]) > 0
+					cMsg += CRLF + "Primeiras falhas de comunicacao:" + CRLF
+					For nI := 1 To Min(5, Len(oRes["falhas"]))
+						cMsg += " - SKU " + oRes["falhas"][nI][1] + ": " + oRes["falhas"][nI][2] + CRLF
+					Next nI
+					MsgAlert(cMsg, "Sincronizacao Finalizada com Alertas")
+				Else
+					MsgInfo(cMsg, "Sincronizacao Nuvemshop x VTEX Concluida")
 				EndIf
 				FreeObj(oRes)
 			EndIf
