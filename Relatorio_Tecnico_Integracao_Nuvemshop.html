@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Relatório de Homologação: Integração Protheus x Nuvemshop</title>
+  <style>
+    @page {
+      size: A4;
+      margin: 12mm 14mm 12mm 14mm;
+    }
+    body {
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+      color: #1e293b;
+      line-height: 1.42;
+      font-size: 11.5px;
+      margin: 0;
+      padding: 0;
+      background: #fff;
+    }
+    .header {
+      border-bottom: 2px solid #059669;
+      padding-bottom: 8px;
+      margin-bottom: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+    }
+    .header h1 {
+      font-size: 18px;
+      color: #0f172a;
+      margin: 0 0 3px 0;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+    }
+    .header .subtitle {
+      font-size: 11px;
+      color: #64748b;
+      margin: 0;
+    }
+    .badge-success {
+      background-color: #ecfdf5;
+      border: 1px solid #a7f3d0;
+      color: #065f46;
+      padding: 4px 10px;
+      border-radius: 4px;
+      font-size: 10.5px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .section {
+      margin-bottom: 10px;
+    }
+    .section-title {
+      font-size: 12.5px;
+      font-weight: 700;
+      color: #047857;
+      border-bottom: 1px solid #e2e8f0;
+      padding-bottom: 3px;
+      margin-bottom: 6px;
+    }
+    .card {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      padding: 8px 10px;
+      margin-bottom: 6px;
+    }
+    .card-success { border-left: 4px solid #10b981; }
+    .card-warning { border-left: 4px solid #f59e0b; }
+    .card-danger  { border-left: 4px solid #ef4444; }
+    .card-info    { border-left: 4px solid #0284c7; }
+    ul {
+      margin: 0;
+      padding-left: 18px;
+    }
+    li {
+      margin-bottom: 3px;
+    }
+    li:last-child {
+      margin-bottom: 0;
+    }
+    strong { color: #0f172a; }
+    code {
+      font-family: Consolas, Monaco, monospace;
+      background: #e2e8f0;
+      padding: 1px 4px;
+      border-radius: 3px;
+      font-size: 10.5px;
+      color: #0f172a;
+    }
+    pre {
+      background: #0f172a;
+      color: #38bdf8;
+      padding: 7px 10px;
+      border-radius: 4px;
+      font-family: Consolas, Monaco, monospace;
+      font-size: 10.5px;
+      margin: 5px 0;
+      overflow-x: auto;
+    }
+    .table-evidence {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 5px;
+      font-size: 11px;
+    }
+    .table-evidence th, .table-evidence td {
+      border: 1px solid #cbd5e1;
+      padding: 4px 6px;
+      text-align: left;
+    }
+    .table-evidence th {
+      background: #f1f5f9;
+      font-weight: 600;
+      color: #334155;
+    }
+    .table-evidence td.val-highlight {
+      color: #059669;
+      font-weight: 700;
+    }
+    .footer {
+      margin-top: 12px;
+      padding-top: 5px;
+      border-top: 1px solid #e2e8f0;
+      font-size: 10px;
+      color: #94a3b8;
+      display: flex;
+      justify-content: space-between;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <div>
+      <h1>Relatório de Homologação: Protheus x Nuvemshop</h1>
+      <p class="subtitle">Exportação Ponta a Ponta Concluída, Custom Fields e Metodologia de Consulta</p>
+    </div>
+    <div class="badge-success">
+      STATUS: HOMOLOGADO COM SUCESSO
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">1. Como Localizamos o Produto Piloto (Metodologia e Query SQL)</div>
+    <div class="card card-info">
+      <p style="margin: 0 0 5px 0;">Para comprovar se a ausência de dados no item inicial (<code>1043190</code>) era do código ou da base de teste <code>PROTHEUS_DES</code>, consultamos diretamente a view responsável pela consolidação comercial do e-commerce (<code>ECOMMERCE_PRODWEB</code>), filtrando apenas itens com saldo e preço ativos:</p>
+      
+      <pre>SELECT TOP 5 PRODUTO, FILIAL, PRECO, ESTOQUE 
+FROM ECOMMERCE_PRODWEB 
+WHERE PRECO > 0 AND ESTOQUE > 0</pre>
+
+      <p style="margin: 5px 0 0 0;"><strong>Resultado Obtido no APSDU:</strong> O produto <strong><code>0636416</code></strong> foi retornado no topo com Filial <code>03150001</code>, Preço de <strong>R$ 510,22</strong> e Saldo de <strong>1 unidade</strong>. Ao cruzar com a tabela <code>SB1010</code>, <code>SB5010</code> e <code>Z08010</code>, constatamos que ele possuía todo o cadastro complementar (dimensões, peso e aplicações veiculares do Fiat Idea), tornando-o o piloto ideal para o teste ponta a ponta.</p>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">2. Evidência de Sucesso: Produto Cadastrado na Nuvemshop</div>
+    <div class="card card-success">
+      <table class="table-evidence">
+        <thead>
+          <tr>
+            <th>Atributo Integrado</th>
+            <th>Origem no Protheus</th>
+            <th>Valor Extraído e Enviado</th>
+            <th>Retorno / Status Nuvemshop</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Produto Cloud (ID)</strong></td>
+            <td>Nuvemshop REST API</td>
+            <td>SKU / RefId: <code>0636416</code></td>
+            <td class="val-highlight">ID: 367481652 (Criado)</td>
+          </tr>
+          <tr>
+            <td><strong>Variante de Estoque</strong></td>
+            <td>Nuvemshop REST API</td>
+            <td>Estoque: <code>1 un</code> (ECOMMERCE_PRODWEB)</td>
+            <td class="val-highlight">VarID: 1596927291 (Ativo)</td>
+          </tr>
+          <tr>
+            <td><strong>Preço de Venda</strong></td>
+            <td><code>ECOMMERCE_PRODWEB</code></td>
+            <td>R$ 510,22</td>
+            <td class="val-highlight">OK (Refletido na Loja)</td>
+          </tr>
+          <tr>
+            <td><strong>Categoria</strong></td>
+            <td><code>SBM010</code> / B1_GRUPO (211)</td>
+            <td>FAROL PRINCIPAL</td>
+            <td class="val-highlight">OK (Criada e Vinculada)</td>
+          </tr>
+          <tr>
+            <td><strong>Peso Bruto</strong></td>
+            <td><code>SB1010</code> / B1_PESBRU</td>
+            <td>2,970 kg (3 decimais)</td>
+            <td class="val-highlight">OK (Cálculo de Frete)</td>
+          </tr>
+          <tr>
+            <td><strong>Dimensões de Frete</strong></td>
+            <td><code>SB5010</code></td>
+            <td>23 x 32 x 55 cm</td>
+            <td class="val-highlight">OK (Cubagem)</td>
+          </tr>
+          <tr>
+            <td><strong>Campos Personalizados</strong></td>
+            <td><code>Z08010</code> / Custom Objects</td>
+            <td>Montadora: FIAT | Modelo: Idea | Anos: 2005-2010</td>
+            <td class="val-highlight">OK (Atualizado no Painel)</td>
+          </tr>
+          <tr>
+            <td><strong>De-Para Protheus</strong></td>
+            <td>Tabelas <code>VT9</code> e <code>VTD</code></td>
+            <td>Vínculo gravado com sucesso</td>
+            <td class="val-highlight">OK (Rastreabilidade ERP)</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">3. Campos Personalizados (Custom Fields / Busca Veicular)</div>
+    <div class="card card-info">
+      <ul>
+        <li><strong>Validação de Schema:</strong> Os campos personalizados foram sincronizados com sucesso na variante. No painel administrativo da Nuvemshop, os campos <em>Montadoras compatíveis (FIAT)</em>, <em>Modelos compatíveis (Idea)</em>, <em>Anos (2005 a 2010)</em>, <em>Aplicação</em> e <em>Código Fortbras</em> já constam preenchidos.</li>
+        <li><strong>Auto-Cadastro Dinâmico:</strong> O código AdvPL foi aprimorado para registrar automaticamente novas montadoras e modelos na tabela de Custom Objects da Nuvemshop, eliminando qualquer risco de inconsistência de referência (<code>REF_NOT_FOUND</code>).</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">4. Ponto Remanescente: Fotos e Imagens</div>
+    <div class="card card-warning">
+      <ul>
+        <li><strong>Detecção Concluída:</strong> O motor identificou com sucesso os nomes dos arquivos das 2 imagens associadas ao produto (<code>FO0000001459.jpg</code> e <code>0636416_01.jpg</code>).</li>
+        <li><strong>Única Pendência:</strong> Como a Nuvemshop opera em nuvem pública (AWS), seus robôs exigem que o endereço base onde as fotos estão hospedadas (atualmente <code>https://b2b.fortbras.com.br/</code>) seja <strong>público e acessível via internet</strong> (sem bloqueio de VPN ou firewall corporativo).</li>
+        <li><strong>Ação com a TI:</strong> Basta a infraestrutura confirmar/liberar o domínio público ou bucket onde os arquivos de foto do e-commerce ficam disponíveis externamente.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="footer">
+    <span>Fortbras — Projeto de Integração Nuvemshop</span>
+    <span>Documento Técnico de Homologação Final</span>
+  </div>
+
+</body>
+</html>

@@ -1,0 +1,16 @@
+# Arquivos temporarios e logs
+*.log
+*.bak
+*.tmp
+*.ppo
+*.tds
+
+# Pastas de build do VS Code / AdvPL
+.advpl/
+.vscode/
+bin/
+
+# Sistema Operacional
+Thumbs.db
+Desktop.ini
+.DS_Store
