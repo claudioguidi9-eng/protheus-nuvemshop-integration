@@ -77,12 +77,23 @@ U_NuvTestCatalog
 ```
 - **Opção 1:** Digite o SKU piloto `340684` para ver os dados retornando da Nuvemshop.
 - **Opção 2:** Digite o produto `104319` para ver os dados automotivos locais do Protheus (`Z08`/`Z09`).
-- **Opção 3:** Exporte um produto teste piloto da Fortbras para a Nuvemshop.
+- **Opção 3:** Exporte um produto teste piloto da Fortbras para a Nuvemshop (com validação de `SBZ->BZ_YB2C`).
 - **Opção 4:** Processe a fila `VTF`.
 - **Opção 5:** Enfileire produto na VTF para simular alteração de estoque/preço.
 - **Opção 6:** Dispare um evento de teste direto para a Torre de Controle (Monitor Web).
+- **Opção 7:** **Carga Total de Produtos B2C (`SBZ->BZ_YB2C = 'S'`):** Consulta em lote os produtos aprovados na filial configurada em `MV_NUVFIL` e envia o catálogo completo para a Nuvemshop com régua de progresso e relatório final.
 
 ---
+
+### 1.2 Regra de Negócio de Seleção B2C (SBZ)
+- **Tabela de Controle:** `SBZ010` (Indicadores de Produtos por Filial).
+- **Campo de Elegibilidade:** `BZ_YB2C` (`S` = Sim, exporta para Nuvemshop; `N` = Não, desconsidera).
+- **Filial de Consulta:** Parâmetro `MV_NUVFIL` (ex: `03150001` / `0315`).
+- **Bloqueio:** Desconsidera produtos com `SB1->B1_MSBLQL == '1'`.
+- **Rotinas Atualizadas:**
+  - `NuvemProduto.prw`: método `ExportAllB2C(cFilialP, bProgress)`, validação em `ExportProduct()` e cadastro automático na fila `VTF` em `UpdtAtuWeb()`.
+  - `NuvTestCatalog.prw`: Opção 7 para execução assistida e visualização do status B2C nas opções 2 e 3.
+  - `ECJOBNUV.prw`: Suporte a sincronização agendada contínua via `JOB_NUVCAT`.
 
 ## 5. Torre de Controle / Painel Web em Tempo Real
 

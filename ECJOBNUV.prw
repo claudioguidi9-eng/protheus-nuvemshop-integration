@@ -43,7 +43,7 @@ User Function ECJOBNUV(cEmp, cFil, cUsaFil)
 			ConOut("[ECJOBNUV] Outra instancia em execucao para a chave: " + cLockKey + ". Aguardando proximo ciclo...")
 		Else
 			// Executa o processamento da fila de produtos
-			ECJOBNUV1(cUsaFil)
+			ECJOBNUV1(cUsaFil, cFil)
 			UnLockByName(cLockKey, .T., .T., .T.)
 		EndIf
 
@@ -69,11 +69,21 @@ Return
 /*/{Protheus.doc} ECJOBNUV1
 Worker interno acionado pelo loop principal.
 /*/
-Static Function ECJOBNUV1(cUsaFil)
+Static Function ECJOBNUV1(cUsaFil, cFil)
 	Local oNuvProd := NuvemProduto():New()
+	Local lSyncCat := SuperGetMV("JOB_NUVCAT", .F., .F.) // Habilita carga total/incremental B2C periodica
+	Local cFilEcom := AllTrim(cValToChar(SuperGetMV("MV_NUVFIL", .F., "03150001")))
 
-	// Dispara a sincronizacao da fila VTF
+	Default cFil := cFilEcom
+
+	// 1. Dispara a sincronizacao da fila VTF (precos e estoques em tempo real)
 	oNuvProd:UpdtAtuWeb()
+
+	// 2. Se configurado JOB_NUVCAT = .T., executa a sincronizacao B2C (SBZ->BZ_YB2C = 'S')
+	If lSyncCat
+		ConOut("[ECJOBNUV] Executando sincronizacao de catalogo B2C agendada na filial " + cFil + "...")
+		oNuvProd:ExportAllB2C(cFil)
+	EndIf
 
 	FreeObj(oNuvProd)
 Return .T.

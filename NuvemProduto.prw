@@ -39,7 +39,8 @@ CLASS NuvemProduto FROM NuvemAcesso
 	METHOD SetCustomFields(nVariantId, aCustomFields)
 	METHOD GetDadosProd(cCodProd)
 	METHOD GetOrCreateCategory(cCatName)
-	METHOD ExportProduct(cCodProd)
+	METHOD ExportProduct(cCodProd, lForce)
+	METHOD ExportAllB2C(cFilialP, bProgress)
 	METHOD GravaIdWEB(cCodProd, cProdId, cVarId)
 
 ENDCLASS
@@ -681,10 +682,19 @@ Orquestra o cadastro completo do produto na Nuvemshop:
 2. Verifica se o SKU ja existe na Nuvemshop (idempotencia)
 3. Cria ou Atualiza o Produto
 4. Envia os Custom Fields na variante
-5. Grava os IDs Web na tabela de de-para VT9 / VTD
+/*/{Protheus.doc} ExportProduct
+Orquestra o cadastro completo do produto na Nuvemshop:
+1. Valida elegibilidade B2C (SBZ->BZ_YB2C == 'S') salvo se lForce == .T.
+2. Coleta dados do Protheus
+3. Verifica se o SKU ja existe na Nuvemshop (idempotencia)
+4. Cria ou Atualiza o Produto
+5. Envia os Custom Fields na variante
+6. Grava os IDs Web na tabela de de-para VT9 / VTD
+@param cCodProd, character, Codigo do produto no Protheus
+@param lForce, logical, Se .T., forca a exportacao sem validar SBZ->BZ_YB2C (padrao .T. para testes pontuais)
 /*/
-METHOD ExportProduct(cCodProd) CLASS NuvemProduto
-	Local oProdData     := ::GetDadosProd(cCodProd)
+METHOD ExportProduct(cCodProd, lForce) CLASS NuvemProduto
+	Local oProdData     := Nil
 	Local oCheckSku     := Nil
 	Local oResp         := Nil
 	Local cBody         := ""
@@ -699,6 +709,29 @@ METHOD ExportProduct(cCodProd) CLASS NuvemProduto
 	Local nCatId        := 0
 	Local cCatJson      := ""
 	Local lSuccess      := .F.
+	Local cFilEcom      := AllTrim(cValToChar(SuperGetMV("MV_NUVFIL", .F., "03150001")))
+	Local lIsB2C        := .F.
+
+	Default lForce := .T.
+
+	// Se nao for envio forcado, valida se o item esta aprovado para B2C
+	If !lForce .And. ChkFile("SBZ")
+		DbSelectArea("SBZ")
+		SBZ->(DbSetOrder(1)) // BZ_FILIAL + BZ_COD
+		If SBZ->(DbSeek(cFilEcom + cCodProd)) .Or. ;
+		   SBZ->(DbSeek(SubStr(cFilEcom, 1, 4) + cCodProd)) .Or. ;
+		   SBZ->(DbSeek(xFilial("SBZ") + cCodProd))
+			If SBZ->(FieldPos("BZ_YB2C")) > 0
+				lIsB2C := (Upper(AllTrim(SBZ->BZ_YB2C)) == "S")
+			EndIf
+		EndIf
+		If !lIsB2C
+			ConOut("[NUVEMSHOP][IGNORADO] Produto " + cCodProd + " desconsiderado por nao estar marcado como B2C (SBZ->BZ_YB2C != 'S').")
+			Return .F.
+		EndIf
+	EndIf
+
+	oProdData := ::GetDadosProd(cCodProd)
 
 	If oProdData == Nil
 		ConOut("[NUVEMSHOP][ERRO] Produto " + cCodProd + " nao encontrado no Protheus.")
@@ -887,6 +920,7 @@ METHOD UpdtAtuWeb() CLASS NuvemProduto
 	Local cBodyVar  := ""
 	Local oData     := Nil
 	Local oRespVar  := Nil
+	Local cFilEcom  := AllTrim(cValToChar(SuperGetMV("MV_NUVFIL", .F., "03150001")))
 
 	cQuery := "SELECT VTF.R_E_C_N_O_ AS RECVTF, VTF.VTF_PRODUT, VTF.VTF_TABELA "
 	cQuery += " FROM " + RetSqlName("VTF") + " VTF "
@@ -931,8 +965,25 @@ METHOD UpdtAtuWeb() CLASS NuvemProduto
 				ConOut("[NUVEMSHOP][ERRO] Fila VTF: Falha ao atualizar variante " + cVarId + " do produto " + cProduto)
 			EndIf
 		Else
-			// Sem vinculo na Nuvemshop -> baixa da fila para nao travar proximas execucoes
-			ConOut("[NUVEMSHOP][AVISO] Fila VTF: Produto " + cProduto + " sem vinculo nas tabelas VT9/VTD. Baixando da fila.")
+			// Sem vinculo na Nuvemshop -> verifica se eh produto B2C para cadastrar automaticamente
+			If ChkFile("SBZ")
+				DbSelectArea("SBZ")
+				SBZ->(DbSetOrder(1))
+				If (SBZ->(DbSeek(cFilEcom + cProduto)) .Or. ;
+				    SBZ->(DbSeek(SubStr(cFilEcom, 1, 4) + cProduto)) .Or. ;
+				    SBZ->(DbSeek(xFilial("SBZ") + cProduto))) .And. ;
+				   SBZ->(FieldPos("BZ_YB2C")) > 0 .And. Upper(AllTrim(SBZ->BZ_YB2C)) == "S"
+					ConOut("[NUVEMSHOP] Fila VTF: Produto B2C " + cProduto + " sem vinculo. Realizando primeiro cadastro na Nuvemshop...")
+					If ::ExportProduct(cProduto, .T.)
+						nCont++
+					EndIf
+				Else
+					ConOut("[NUVEMSHOP][AVISO] Fila VTF: Produto " + cProduto + " sem vinculo e nao marcado como B2C (SBZ->BZ_YB2C). Baixando da fila.")
+				EndIf
+			Else
+				ConOut("[NUVEMSHOP][AVISO] Fila VTF: Produto " + cProduto + " sem vinculo nas tabelas VT9/VTD. Baixando da fila.")
+			EndIf
+
 			dbSelectArea("VTF")
 			VTF->(dbGoTo(nRecVTF))
 			RecLock("VTF", .F.)
@@ -1007,3 +1058,124 @@ METHOD GetProductId(cCodProd) CLASS NuvemProduto
 	(cAliasVT9)->(dbCloseArea())
 
 Return cProdId
+
+/*/{Protheus.doc} ExportAllB2C
+Realiza a carga e sincronizacao em lote de todos os produtos homologados para o
+canal B2C da Fortbras na Nuvemshop, filtrando os registros onde SBZ->BZ_YB2C == 'S'
+e o cadastro de produto nao esteja bloqueado (SB1->B1_MSBLQL != '1').
+
+@param cFilialP, character, Filial de estoque/preco a considerar (opcional, padrao MV_NUVFIL)
+@param bProgress, block, Bloco de codigo opcional para callback de progresso:
+                  Eval(bProgress, nAtual, nTotal, cCodProd, lOk, cMsg)
+@return oResult, JsonObject, Objeto com estatisticas: total, sucessos, erros, falhas
+/*/
+METHOD ExportAllB2C(cFilialP, bProgress) CLASS NuvemProduto
+	Local cFilEcom   := ""
+	Local cQuery     := ""
+	Local cAliasQry  := GetNextAlias()
+	Local aProdutos  := {}
+	Local aFalhas    := {}
+	Local nTotal     := 0
+	Local nSucessos  := 0
+	Local nErros     := 0
+	Local nI         := 0
+	Local cCodProd   := ""
+	Local lOk        := .F.
+	Local oResult    := JsonObject():New()
+	Local cMsgErr    := ""
+
+	Default cFilialP := AllTrim(cValToChar(SuperGetMV("MV_NUVFIL", .F., "03150001")))
+	cFilEcom := cFilialP
+	If Empty(cFilEcom)
+		cFilEcom := cFilAnt
+	EndIf
+
+	ConOut("[NUVEMSHOP][CARGA TOTAL B2C] Iniciando levantamento de produtos B2C para a filial: " + cFilEcom)
+
+	// Valida se a tabela SBZ e o campo BZ_YB2C existem no dicionario
+	If !ChkFile("SBZ")
+		ConOut("[NUVEMSHOP][ERRO] Tabela SBZ (Indicadores de Produto) nao encontrada.")
+		oResult["total"]    := 0
+		oResult["sucessos"] := 0
+		oResult["erros"]    := 1
+		oResult["falhas"]   := {{"SBZ", "Tabela SBZ nao encontrada no ambiente"}}
+		Return oResult
+	EndIf
+
+	DbSelectArea("SBZ")
+	If SBZ->(FieldPos("BZ_YB2C")) == 0
+		ConOut("[NUVEMSHOP][ERRO] Campo BZ_YB2C nao encontrado na tabela SBZ.")
+		oResult["total"]    := 0
+		oResult["sucessos"] := 0
+		oResult["erros"]    := 1
+		oResult["falhas"]   := {{"SBZ", "Campo BZ_YB2C nao existe na SBZ"}}
+		Return oResult
+	EndIf
+
+	// Montagem da query de selecao de produtos B2C
+	cQuery := "SELECT DISTINCT SB1.B1_COD "
+	cQuery += " FROM " + RetSqlName("SB1") + " SB1 "
+	cQuery += " INNER JOIN " + RetSqlName("SBZ") + " SBZ "
+	cQuery += "    ON SBZ.BZ_COD = SB1.B1_COD "
+	cQuery += "   AND (SBZ.BZ_FILIAL = '" + cFilEcom + "' OR SBZ.BZ_FILIAL = '" + SubStr(cFilEcom, 1, 4) + "' OR SBZ.BZ_FILIAL = '" + xFilial("SBZ") + "' OR SBZ.BZ_FILIAL = ' ') "
+	cQuery += "   AND (SBZ.BZ_YB2C = 'S' OR SBZ.BZ_YB2C = 's') "
+	cQuery += "   AND SBZ.D_E_L_E_T_ = ' ' "
+	cQuery += " WHERE SB1.D_E_L_E_T_ = ' ' "
+	cQuery += "   AND (SB1.B1_FILIAL = '" + xFilial("SB1") + "' OR SB1.B1_FILIAL = '" + cFilEcom + "' OR SB1.B1_FILIAL = '" + SubStr(cFilEcom, 1, 4) + "' OR SB1.B1_FILIAL = ' ') "
+	cQuery += "   AND (SB1.B1_MSBLQL <> '1' OR SB1.B1_MSBLQL = ' ' OR SB1.B1_MSBLQL IS NULL) "
+	cQuery += " ORDER BY SB1.B1_COD "
+
+	cQuery := ChangeQuery(cQuery)
+	dbUseArea(.T., "TOPCONN", TcGenQry(,, cQuery), cAliasQry, .F., .T.)
+
+	While !(cAliasQry)->(Eof())
+		AAdd(aProdutos, AllTrim((cAliasQry)->B1_COD))
+		(cAliasQry)->(dbSkip())
+	EndDo
+	(cAliasQry)->(dbCloseArea())
+
+	nTotal := Len(aProdutos)
+	ConOut("[NUVEMSHOP][CARGA TOTAL B2C] Total de produtos B2C identificados na filial " + cFilEcom + ": " + cValToChar(nTotal))
+
+	If nTotal == 0
+		oResult["total"]    := 0
+		oResult["sucessos"] := 0
+		oResult["erros"]    := 0
+		oResult["falhas"]   := {}
+		Return oResult
+	EndIf
+
+	// Processa cada produto da lista
+	For nI := 1 To nTotal
+		cCodProd := aProdutos[nI]
+
+		// Exporta o produto (forcar = .T. pois a query ja garantiu BZ_YB2C = 'S')
+		lOk := ::ExportProduct(cCodProd, .T.)
+
+		If lOk
+			nSucessos++
+			cMsgErr := "OK"
+		Else
+			nErros++
+			cMsgErr := ::GetLastError()
+			AAdd(aFalhas, {cCodProd, cMsgErr})
+			ConOut("[NUVEMSHOP][FALHA EXPORTACAO] Produto: " + cCodProd + " Erro: " + cMsgErr)
+		EndIf
+
+		// Notifica o callback de progresso se fornecido
+		If bProgress != Nil
+			Eval(bProgress, nI, nTotal, cCodProd, lOk, cMsgErr)
+		EndIf
+
+		// Intervalo de protecao contra rate limit da Nuvemshop (1 req/s)
+		Sleep(500)
+	Next nI
+
+	ConOut("[NUVEMSHOP][CARGA TOTAL B2C] Finalizado! Total: " + cValToChar(nTotal) + " Sucessos: " + cValToChar(nSucessos) + " Erros: " + cValToChar(nErros))
+
+	oResult["total"]    := nTotal
+	oResult["sucessos"] := nSucessos
+	oResult["erros"]    := nErros
+	oResult["falhas"]   := aFalhas
+
+Return oResult

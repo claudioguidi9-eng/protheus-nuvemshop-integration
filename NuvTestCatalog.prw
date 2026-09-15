@@ -32,11 +32,16 @@ User Function NuvTestCatalog()
 	Local oBtn4     := Nil
 	Local oBtn5     := Nil
 	Local oBtn6     := Nil
+	Local oBtn7     := Nil
 	Local oBtnSair  := Nil
 	Local nI        := 0
 	Local nJ        := 0
 	Local cValField := ""
 	Local cUrlMon   := ""
+	Local oRes      := Nil
+	Local cMsgPrompt:= ""
+	Local cFilEcom  := ""
+	Local cFlagB2C  := ""
 
 	// Inicializa a classe de produtos Nuvemshop
 	oProd := NuvemProduto():New()
@@ -53,18 +58,19 @@ User Function NuvTestCatalog()
 		Return .F.
 	EndIf
 
-	DEFINE MSDIALOG oDlg TITLE "Testes Nuvemshop - Fortbras" FROM 0, 0 TO 350, 460 PIXEL
+	DEFINE MSDIALOG oDlg TITLE "Testes Nuvemshop - Fortbras" FROM 0, 0 TO 400, 480 PIXEL
 
-	@ 010, 015 SAY "Selecione o teste de catalogo Nuvemshop desejado:" SIZE 200, 10 PIXEL OF oDlg
+	@ 010, 015 SAY "Selecione o teste de catalogo Nuvemshop desejado:" SIZE 220, 10 PIXEL OF oDlg
 
-	@ 025, 015 BUTTON oBtn1 PROMPT "1. Consultar SKU na Nuvemshop (GET /products/sku)" SIZE 200, 18 PIXEL OF oDlg ACTION (nOpcao := 1, oDlg:End())
-	@ 048, 015 BUTTON oBtn2 PROMPT "2. Visualizar Dados Protheus Coletados (SB1, SB5, Z08)" SIZE 200, 18 PIXEL OF oDlg ACTION (nOpcao := 2, oDlg:End())
-	@ 071, 015 BUTTON oBtn3 PROMPT "3. Exportar Produto Piloto para Nuvemshop" SIZE 200, 18 PIXEL OF oDlg ACTION (nOpcao := 3, oDlg:End())
-	@ 094, 015 BUTTON oBtn4 PROMPT "4. Executar Sincronizacao de Estoque/Preco (Fila VTF)" SIZE 200, 18 PIXEL OF oDlg ACTION (nOpcao := 4, oDlg:End())
-	@ 117, 015 BUTTON oBtn5 PROMPT "5. Enfileirar Produto na VTF (Simular Mudanca de Saldo)" SIZE 200, 18 PIXEL OF oDlg ACTION (nOpcao := 5, oDlg:End())
-	@ 140, 015 BUTTON oBtn6 PROMPT "6. Disparar Evento ao Painel de Monitoramento (MV_XURLMON)" SIZE 200, 18 PIXEL OF oDlg ACTION (nOpcao := 6, oDlg:End())
+	@ 025, 015 BUTTON oBtn1 PROMPT "1. Consultar SKU na Nuvemshop (GET /products/sku)" SIZE 210, 16 PIXEL OF oDlg ACTION (nOpcao := 1, oDlg:End())
+	@ 045, 015 BUTTON oBtn2 PROMPT "2. Visualizar Dados Protheus Coletados (SB1, SB5, Z08, SBZ)" SIZE 210, 16 PIXEL OF oDlg ACTION (nOpcao := 2, oDlg:End())
+	@ 065, 015 BUTTON oBtn3 PROMPT "3. Exportar Produto Piloto para Nuvemshop" SIZE 210, 16 PIXEL OF oDlg ACTION (nOpcao := 3, oDlg:End())
+	@ 085, 015 BUTTON oBtn4 PROMPT "4. Executar Sincronizacao de Estoque/Preco (Fila VTF)" SIZE 210, 16 PIXEL OF oDlg ACTION (nOpcao := 4, oDlg:End())
+	@ 105, 015 BUTTON oBtn5 PROMPT "5. Enfileirar Produto na VTF (Simular Mudanca de Saldo)" SIZE 210, 16 PIXEL OF oDlg ACTION (nOpcao := 5, oDlg:End())
+	@ 125, 015 BUTTON oBtn6 PROMPT "6. Disparar Evento ao Painel de Monitoramento (MV_XURLMON)" SIZE 210, 16 PIXEL OF oDlg ACTION (nOpcao := 6, oDlg:End())
+	@ 145, 015 BUTTON oBtn7 PROMPT "7. Carga Total de Produtos B2C (SBZ->BZ_YB2C = 'S')" SIZE 210, 16 PIXEL OF oDlg ACTION (nOpcao := 7, oDlg:End())
 
-	@ 165, 150 BUTTON oBtnSair PROMPT "Cancelar / Fechar" SIZE 65, 13 PIXEL OF oDlg ACTION (nOpcao := 0, oDlg:End())
+	@ 170, 160 BUTTON oBtnSair PROMPT "Cancelar / Fechar" SIZE 65, 14 PIXEL OF oDlg ACTION (nOpcao := 0, oDlg:End())
 
 	ACTIVATE MSDIALOG oDlg CENTERED
 
@@ -114,10 +120,26 @@ User Function NuvTestCatalog()
 			cCodProd := "104319"
 		EndIf
 
+		// Verifica flag B2C na SBZ
+		cFilEcom := AllTrim(cValToChar(SuperGetMV("MV_NUVFIL", .F., "03150001")))
+		cFlagB2C := "N"
+		If ChkFile("SBZ")
+			DbSelectArea("SBZ")
+			SBZ->(DbSetOrder(1))
+			If SBZ->(DbSeek(cFilEcom + cCodProd)) .Or. ;
+			   SBZ->(DbSeek(SubStr(cFilEcom, 1, 4) + cCodProd)) .Or. ;
+			   SBZ->(DbSeek(xFilial("SBZ") + cCodProd))
+				If SBZ->(FieldPos("BZ_YB2C")) > 0
+					cFlagB2C := Upper(AllTrim(SBZ->BZ_YB2C))
+				EndIf
+			EndIf
+		EndIf
+
 		oData := oProd:GetDadosProd(AllTrim(cCodProd))
 		If oData != Nil
 			cMsg := "DADOS COLETADOS NO PROTHEUS:" + CRLF + CRLF
 			cMsg += "Codigo: " + cValToChar(oData["codigo"]) + CRLF
+			cMsg += "Aprovado B2C (SBZ->BZ_YB2C): " + cFlagB2C + IIf(cFlagB2C == "S", " (SIM - Elegivel Nuvemshop)", " (NAO - Bloqueado p/ B2C)") + CRLF
 			cMsg += "SKU / RefId: " + cValToChar(oData["ref_id"]) + CRLF
 			cMsg += "Nome: " + cValToChar(oData["nome"]) + CRLF
 			cMsg += "Categoria: " + cValToChar(oData["categoria"]) + " (Grupo: " + cValToChar(oData["grupo"]) + ")" + CRLF
@@ -158,9 +180,33 @@ User Function NuvTestCatalog()
 			cCodProd := "104319"
 		EndIf
 
+		// Valida BZ_YB2C
+		cFilEcom := AllTrim(cValToChar(SuperGetMV("MV_NUVFIL", .F., "03150001")))
+		cFlagB2C := "N"
+		If ChkFile("SBZ")
+			DbSelectArea("SBZ")
+			SBZ->(DbSetOrder(1))
+			If SBZ->(DbSeek(cFilEcom + cCodProd)) .Or. ;
+			   SBZ->(DbSeek(SubStr(cFilEcom, 1, 4) + cCodProd)) .Or. ;
+			   SBZ->(DbSeek(xFilial("SBZ") + cCodProd))
+				If SBZ->(FieldPos("BZ_YB2C")) > 0
+					cFlagB2C := Upper(AllTrim(SBZ->BZ_YB2C))
+				EndIf
+			EndIf
+		EndIf
+
+		If cFlagB2C != "S"
+			If !MsgYesNo("AVISO: O produto [" + AllTrim(cCodProd) + "] esta com BZ_YB2C = '" + cFlagB2C + "' na filial " + cFilEcom + "." + CRLF + CRLF + ;
+			             "Pela regra de negocio, apenas produtos com BZ_YB2C = 'S' sobem para a Nuvemshop." + CRLF + CRLF + ;
+			             "Deseja exportar mesmo assim para este teste piloto?", "Validacao B2C (SBZ->BZ_YB2C)")
+				FreeObj(oProd)
+				Return .F.
+			EndIf
+		EndIf
+
 		If MsgYesNo("Deseja realmente exportar o produto [" + AllTrim(cCodProd) + "] para a loja Nuvemshop " + oProd:cStoreId + "?", "Confirmacao de Exportacao")
 			ConOut("[NUVEMSHOP TESTE] Exportando produto: " + AllTrim(cCodProd))
-			lOk := oProd:ExportProduct(AllTrim(cCodProd))
+			lOk := oProd:ExportProduct(AllTrim(cCodProd), .T.)
 			If lOk
 				oData := oProd:GetDadosProd(AllTrim(cCodProd))
 				cMsg := "PRODUTO EXPORTADO COM SUCESSO!" + CRLF + CRLF
@@ -225,6 +271,54 @@ User Function NuvTestCatalog()
 			ConOut("[NUVEMSHOP TESTE] Disparando evento de teste para o monitor: " + cUrlMon)
 			oProd:SendMonitor("POST", "/products/ping-test", 200, '{"ping": true, "sku": "1043190"}', '{"status": "SUCCESS", "message": "Ping do Protheus recebido"}')
 			MsgInfo("Evento de teste enviado com sucesso para o Painel Web!" + CRLF + CRLF + "Endpoint: " + cUrlMon + CRLF + "Acesse https://toat-fortbras.vercel.app no navegador para ver o feed de eventos em tempo real.", "Monitor Web Notificado")
+		EndIf
+
+	Case nOpcao == 7
+		// 7. Carga Total de Produtos B2C (SBZ->BZ_YB2C = 'S')
+		cFilEcom := AllTrim(cValToChar(SuperGetMV("MV_NUVFIL", .F., "03150001")))
+		cFilEcom := AllTrim(FWInputBox("Informe a Filial de Estoque/Preco (SBZ):", cFilEcom))
+		If Empty(cFilEcom)
+			cFilEcom := "03150001"
+		EndIf
+
+		cMsgPrompt := "CONFIRMACAO DE CARGA EM LOTE B2C" + CRLF + CRLF
+		cMsgPrompt += "Filial selecionada: " + cFilEcom + CRLF
+		cMsgPrompt += "Regra de Filtro: SBZ.BZ_YB2C = 'S' e SB1.B1_MSBLQL != '1'" + CRLF
+		cMsgPrompt += "Loja Nuvemshop: " + oProd:cStoreId + CRLF + CRLF
+		cMsgPrompt += "Esta operacao ira consultar todos os produtos homologados B2C da filial," + CRLF
+		cMsgPrompt += "enviar precos, saldos, fotos e atributos veiculares a Nuvemshop." + CRLF + CRLF
+		cMsgPrompt += "Deseja iniciar a carga agora?"
+
+		If MsgYesNo(cMsgPrompt, "Carga Total de Catalogo Nuvemshop")
+			oRes := Nil
+			Processa({|lEnd| ;
+				oRes := oProd:ExportAllB2C(cFilEcom, {|nAtual, nTotal, cCod, lOkProd, cErr| ;
+					ProcRegua(nTotal), ;
+					IncProc("Processando " + cValToChar(nAtual) + "/" + cValToChar(nTotal) + ": Produto " + cCod) ;
+				}) ;
+			}, "Carga Total B2C Nuvemshop", "Localizando e enviando produtos...", .F.)
+
+			If oRes != Nil
+				cMsg := "CARGA TOTAL B2C FINALIZADA!" + CRLF + CRLF
+				cMsg += "Filial: " + cFilEcom + CRLF
+				cMsg += "Total de produtos B2C identificados: " + cValToChar(oRes["total"]) + CRLF
+				cMsg += "Sucesso (Cadastrados/Atualizados): " + cValToChar(oRes["sucessos"]) + CRLF
+				cMsg += "Erros / Falhas: " + cValToChar(oRes["erros"]) + CRLF
+
+				If oRes["erros"] > 0 .And. ValType(oRes["falhas"]) == "A" .And. Len(oRes["falhas"]) > 0
+					cMsg += CRLF + "Primeiras falhas encontradas:" + CRLF
+					For nI := 1 To Min(5, Len(oRes["falhas"]))
+						cMsg += " - Produto " + oRes["falhas"][nI][1] + ": " + oRes["falhas"][nI][2] + CRLF
+					Next nI
+					If Len(oRes["falhas"]) > 5
+						cMsg += " ... e mais " + cValToChar(Len(oRes["falhas"]) - 5) + " produto(s). Verifique o console." + CRLF
+					EndIf
+					MsgAlert(cMsg, "Carga B2C Finalizada com Alertas")
+				Else
+					MsgInfo(cMsg, "Carga B2C Nuvemshop com Sucesso")
+				EndIf
+				FreeObj(oRes)
+			EndIf
 		EndIf
 	EndCase
 
