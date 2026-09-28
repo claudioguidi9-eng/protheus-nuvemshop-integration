@@ -86,9 +86,9 @@ User Function NuvTestCatalog()
 	Do Case
 	Case nOpcao == 1
 		// 1. Consulta SKU na Nuvemshop
-		cSku := AllTrim(FWInputBox("Informe o SKU para consulta na Nuvemshop:", "340684"))
+		cSku := AllTrim(FWInputBox("Informe o SKU para consulta na Nuvemshop:", "1611906"))
 		If Empty(cSku)
-			cSku := "340684"
+			cSku := "1611906"
 		EndIf
 
 		ConOut("[NUVEMSHOP TESTE] Consultando SKU: " + AllTrim(cSku))
@@ -104,7 +104,15 @@ User Function NuvTestCatalog()
 			EndIf
 			If ValType(oJsonSku["variants"]) == "A" .And. Len(oJsonSku["variants"]) > 0
 				cMsg += "Variante ID: " + cValToChar(oJsonSku["variants"][1]["id"]) + CRLF
-				cMsg += "Preco: R$ " + cValToChar(oJsonSku["variants"][1]["price"]) + CRLF
+				cMsg += "Preco Original (De): R$ " + cValToChar(oJsonSku["variants"][1]["price"]) + CRLF
+				If oJsonSku["variants"][1]:HasProperty("promotional_price") .And. !Empty(oJsonSku["variants"][1]["promotional_price"])
+					cMsg += "Preco Promocional (Por): R$ " + cValToChar(oJsonSku["variants"][1]["promotional_price"]) + CRLF
+					If Val(cValToChar(oJsonSku["variants"][1]["promotional_price"])) >= Val(cValToChar(oJsonSku["variants"][1]["price"]))
+						cMsg += ">>> ALERTA: PRECO PROMOCIONAL ESTA MAIOR OU IGUAL AO PRECO NORMAL (INVERTIDO)!" + CRLF
+					EndIf
+				Else
+					cMsg += "Preco Promocional: [Nenhum - Sem desconto ativo]" + CRLF
+				EndIf
 				cMsg += "Estoque: " + cValToChar(oJsonSku["variants"][1]["stock"]) + CRLF
 			EndIf
 			MsgInfo(cMsg, "Sucesso - SKU Existente")
@@ -119,9 +127,9 @@ User Function NuvTestCatalog()
 
 	Case nOpcao == 2
 		// 2. Visualizar Dados Protheus
-		cCodProd := AllTrim(FWInputBox("Informe o codigo do produto (SB1):", "104319"))
+		cCodProd := AllTrim(FWInputBox("Informe o codigo do produto (SB1):", "1611906"))
 		If Empty(cCodProd)
-			cCodProd := "104319"
+			cCodProd := "1611906"
 		EndIf
 
 		// Verifica flag B2C na SBZ
@@ -131,8 +139,12 @@ User Function NuvTestCatalog()
 			DbSelectArea("SBZ")
 			SBZ->(DbSetOrder(1))
 			If SBZ->(DbSeek(cFilEcom + cCodProd)) .Or. ;
-			   SBZ->(DbSeek(SubStr(cFilEcom, 1, 4) + cCodProd)) .Or. ;
-			   SBZ->(DbSeek(xFilial("SBZ") + cCodProd))
+					SBZ->(DbSeek(SubStr(cFilEcom, 1, 4) + cCodProd)) .Or. ;
+					SBZ->(DbSeek("03150001" + cCodProd)) .Or. ;
+					SBZ->(DbSeek("0315" + cCodProd)) .Or. ;
+					SBZ->(DbSeek("04160001" + cCodProd)) .Or. ;
+					SBZ->(DbSeek("0416" + cCodProd)) .Or. ;
+					SBZ->(DbSeek(xFilial("SBZ") + cCodProd))
 				If SBZ->(FieldPos("BZ_YB2C")) > 0
 					cFlagB2C := Upper(AllTrim(SBZ->BZ_YB2C))
 				EndIf
@@ -147,8 +159,10 @@ User Function NuvTestCatalog()
 			cMsg += "SKU / RefId: " + cValToChar(oData["ref_id"]) + CRLF
 			cMsg += "Nome: " + cValToChar(oData["nome"]) + CRLF
 			cMsg += "Categoria: " + cValToChar(oData["categoria"]) + " (Grupo: " + cValToChar(oData["grupo"]) + ")" + CRLF
-			cMsg += "Marca: " + cValToChar(oData["marca"]) + CRLF
-			cMsg += "Preco: R$ " + Transform(oData["preco"], "@E 999,999.99") + CRLF
+			cMsg += "Preco Original (De): R$ " + Transform(oData["preco"], "@E 999,999.99") + CRLF
+			If oData:HasProperty("preco_promocional") .And. oData["preco_promocional"] > 0
+				cMsg += "Preco Promocional (Por): R$ " + Transform(oData["preco_promocional"], "@E 999,999.99") + " [COM DESCONTO]" + CRLF
+			EndIf
 			cMsg += "Estoque: " + cValToChar(oData["estoque"]) + CRLF
 			cMsg += "Peso: " + Transform(oData["peso"], "@E 999.999") + " kg" + CRLF
 			cMsg += "Dimensoes: " + cValToChar(oData["altura"]) + "x" + cValToChar(oData["largura"]) + "x" + cValToChar(oData["comprimento"]) + " cm" + CRLF
@@ -179,9 +193,9 @@ User Function NuvTestCatalog()
 
 	Case nOpcao == 3
 		// 3. Exportar Produto Piloto
-		cCodProd := AllTrim(FWInputBox("Informe o codigo do produto para EXPORTAR:", "104319"))
+		cCodProd := AllTrim(FWInputBox("Informe o codigo do produto para EXPORTAR:", "1611906"))
 		If Empty(cCodProd)
-			cCodProd := "104319"
+			cCodProd := "1611906"
 		EndIf
 
 		// Valida BZ_YB2C
@@ -191,8 +205,12 @@ User Function NuvTestCatalog()
 			DbSelectArea("SBZ")
 			SBZ->(DbSetOrder(1))
 			If SBZ->(DbSeek(cFilEcom + cCodProd)) .Or. ;
-			   SBZ->(DbSeek(SubStr(cFilEcom, 1, 4) + cCodProd)) .Or. ;
-			   SBZ->(DbSeek(xFilial("SBZ") + cCodProd))
+					SBZ->(DbSeek(SubStr(cFilEcom, 1, 4) + cCodProd)) .Or. ;
+					SBZ->(DbSeek("03150001" + cCodProd)) .Or. ;
+					SBZ->(DbSeek("0315" + cCodProd)) .Or. ;
+					SBZ->(DbSeek("04160001" + cCodProd)) .Or. ;
+					SBZ->(DbSeek("0416" + cCodProd)) .Or. ;
+					SBZ->(DbSeek(xFilial("SBZ") + cCodProd))
 				If SBZ->(FieldPos("BZ_YB2C")) > 0
 					cFlagB2C := Upper(AllTrim(SBZ->BZ_YB2C))
 				EndIf
@@ -201,8 +219,8 @@ User Function NuvTestCatalog()
 
 		If cFlagB2C != "S"
 			If !MsgYesNo("AVISO: O produto [" + AllTrim(cCodProd) + "] esta com BZ_YB2C = '" + cFlagB2C + "' na filial " + cFilEcom + "." + CRLF + CRLF + ;
-			             "Pela regra de negocio, apenas produtos com BZ_YB2C = 'S' sobem para a Nuvemshop." + CRLF + CRLF + ;
-			             "Deseja exportar mesmo assim para este teste piloto?", "Validacao B2C (SBZ->BZ_YB2C)")
+					"Pela regra de negocio, apenas produtos com BZ_YB2C = 'S' sobem para a Nuvemshop." + CRLF + CRLF + ;
+					"Deseja exportar mesmo assim para este teste piloto?", "Validacao B2C (SBZ->BZ_YB2C)")
 				FreeObj(oProd)
 				Return .F.
 			EndIf
@@ -219,8 +237,10 @@ User Function NuvTestCatalog()
 				cMsg += "Variante ID: " + oProd:GetVariantId(AllTrim(cCodProd)) + CRLF + CRLF
 				If oData != Nil
 					cMsg += "Nome: " + AllTrim(oData["nome"]) + CRLF
-					cMsg += "Categoria: " + AllTrim(oData["categoria"]) + CRLF
-					cMsg += "Preco enviado: R$ " + Transform(oData["preco"], "@E 999,999.99") + CRLF
+					cMsg += "Preco enviado (De): R$ " + Transform(oData["preco"], "@E 999,999.99") + CRLF
+					If oData:HasProperty("preco_promocional") .And. oData["preco_promocional"] > 0
+						cMsg += "Preco Promocional enviado (Por): R$ " + Transform(oData["preco_promocional"], "@E 999,999.99") + CRLF
+					EndIf
 					cMsg += "Estoque enviado: " + cValToChar(oData["estoque"]) + CRLF
 					cMsg += "Peso enviado: " + Transform(oData["peso"], "@E 999.999") + " kg" + CRLF
 					cMsg += "Fotos encontradas: " + cValToChar(Len(oData["imagens"])) + CRLF
@@ -297,10 +317,10 @@ User Function NuvTestCatalog()
 			oRes := Nil
 			Processa({|lEnd| ;
 				oRes := oProd:ExportAllB2C(cFilEcom, {|nAtual, nTotal, cCod, lOkProd, cErr| ;
-					ProcRegua(nTotal), ;
-					IncProc("Processando " + cValToChar(nAtual) + "/" + cValToChar(nTotal) + ": Produto " + cCod) ;
+				ProcRegua(nTotal), ;
+				IncProc("Processando " + cValToChar(nAtual) + "/" + cValToChar(nTotal) + ": Produto " + cCod) ;
 				}) ;
-			}, "Carga Total B2C Nuvemshop", "Localizando e enviando produtos...", .F.)
+				}, "Carga Total B2C Nuvemshop", "Localizando e enviando produtos...", .F.)
 
 			If oRes != Nil
 				cMsg := "CARGA TOTAL B2C FINALIZADA!" + CRLF + CRLF
@@ -327,9 +347,9 @@ User Function NuvTestCatalog()
 
 	Case nOpcao == 8
 		// 8. Sincronizar Estoque/Preco por SKU (Match Catalogo VTEX)
-		cCodProd := AllTrim(FWInputBox("Informe o codigo do produto (SKU VTEX) para sincronizar:", "104319"))
+		cCodProd := AllTrim(FWInputBox("Informe o codigo do produto (SKU Protheus) para sincronizar:", "1611906"))
 		If Empty(cCodProd)
-			cCodProd := "104319"
+			cCodProd := "1611906"
 		EndIf
 
 		ConOut("[NUVEMSHOP TESTE] Sincronizando estoque e preco por SKU: " + AllTrim(cCodProd))
@@ -349,13 +369,17 @@ User Function NuvTestCatalog()
 			cMsg += CRLF + "Vinculo gravado com sucesso no de-para (VT9 e VTD)."
 			MsgInfo(cMsg, "Sucesso Sincronizacao VTEX Match")
 		Else
-			If oProd:nLastStatus == 404
-				MsgAlert("O produto SKU [" + AllTrim(cCodProd) + "] ainda NAO existe na Nuvemshop (HTTP 404)." + CRLF + CRLF + ;
-				         "Isso significa que a VTEX ainda nao realizou a publicacao do catalogo deste produto." + CRLF + ;
-				         "Assim que a VTEX subir o item, o Protheus fara o vinculo e atualizara estoque/preco automaticamente.", "Aguardando Publicacao VTEX")
-			Else
-				MsgStop("Falha ao sincronizar produto: " + oProd:GetLastError(), "Erro de Sincronizacao")
+			cMsgErr := "Falha ao sincronizar SKU [" + AllTrim(cCodProd) + "]" + CRLF + CRLF
+			cMsgErr += "Status HTTP: " + cValToChar(oProd:nLastStatus) + CRLF
+			cMsgErr += "Store ID: " + oProd:GetStoreId() + CRLF
+			If !Empty(oProd:GetLastError())
+				cMsgErr += "Mensagem: " + oProd:GetLastError() + CRLF
 			EndIf
+			If !Empty(oProd:cLastResult)
+				cMsgErr += "Retorno Nuvemshop: " + SubStr(oProd:cLastResult, 1, 250) + CRLF
+			EndIf
+			cMsgErr += CRLF + "Dica: Teste tambem a 'Opcao 1 - Consultar SKU' no menu principal."
+			MsgAlert(cMsgErr, "Alerta Sincronizacao Nuvemshop")
 		EndIf
 
 	Case nOpcao == 9
@@ -376,10 +400,10 @@ User Function NuvTestCatalog()
 			oRes := Nil
 			Processa({|lEnd| ;
 				oRes := oProd:SyncAllStockPriceB2C(cFilEcom, {|nAtual, nTotal, cCod, lOkProd, cErr| ;
-					ProcRegua(nTotal), ;
-					IncProc("Sincronizando " + cValToChar(nAtual) + "/" + cValToChar(nTotal) + ": SKU " + cCod) ;
+				ProcRegua(nTotal), ;
+				IncProc("Sincronizando " + cValToChar(nAtual) + "/" + cValToChar(nTotal) + ": SKU " + cCod) ;
 				}) ;
-			}, "Sincronizacao B2C Nuvemshop", "Localizando SKUs e atualizando precos/saldos...", .F.)
+				}, "Sincronizacao B2C Nuvemshop", "Localizando SKUs e atualizando precos/saldos...", .F.)
 
 			If oRes != Nil
 				cMsg := "SINCRONIZACAO B2C FINALIZADA!" + CRLF + CRLF

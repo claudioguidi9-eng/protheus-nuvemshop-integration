@@ -79,23 +79,47 @@ METHOD ConfigCredentials(cFil) CLASS NuvemAcesso
 	cQuery := ChangeQuery(cQuery)
 	dbUseArea(.T., "TOPCONN", TcGenQry(,, cQuery), cAliasVT8, .F., .T.)
 
-	If !(cAliasVT8)->(Eof())
-		// No cadastro VT8: VT8_CGC armazena o store_id da loja
-		::cStoreId := AllTrim((cAliasVT8)->VT8_CGC)
-	EndIf
-	(cAliasVT8)->(dbCloseArea())
+	// 1. Parametro MV_NUVSTOR e prioritario para definir o Store ID da Nuvemshop
+	::cStoreId := AllTrim(cValToChar(SuperGetMV("MV_NUVSTOR", .F., "8117213")))
 
-	// Se nao encontrou na VT8, busca no parametro MV_NUVSTOR (padrao 8117213 da Fortbras)
-	If Empty(::cStoreId)
-		::cStoreId := AllTrim(SuperGetMV("MV_NUVSTOR", .F., "8117213"))
+	// 2. Se vazio ou zerado no parametro, tenta recuperar da tabela VT8
+	If Empty(::cStoreId) .Or. ::cStoreId == "0"
+		cQuery := "SELECT VT8_CODIGO, VT8_CGC, VT8_MSBLQL "
+		cQuery += " FROM " + RetSqlName("VT8") + " VT8 "
+		cQuery += " WHERE VT8.D_E_L_E_T_ = ' ' "
+		cQuery += "   AND VT8.VT8_API = 'NUVEMSHOP' "
+		cQuery += "   AND VT8.VT8_MSBLQL <> '1' "
+
+		cQuery := ChangeQuery(cQuery)
+		dbUseArea(.T., "TOPCONN", TcGenQry(,, cQuery), cAliasVT8, .F., .T.)
+
+		If !(cAliasVT8)->(Eof()) .And. !Empty((cAliasVT8)->VT8_CGC)
+			::cStoreId := AllTrim((cAliasVT8)->VT8_CGC)
+		EndIf
+		(cAliasVT8)->(dbCloseArea())
+	EndIf
+
+	// 3. Fallback definitivo se ainda vazio: Store ID 8117213 (demofortbras)
+	If Empty(::cStoreId) .Or. ::cStoreId == "0"
+		::cStoreId := "8117213"
 	EndIf
 
 	// Recupera App ID, Access Token e User-Agent via parametros SuperGetMV
-	::cAppId       := AllTrim(SuperGetMV("MV_NUVAPP", .F., "9876"))
-	::cAccessToken := AllTrim(SuperGetMV("MV_NUVTOK", .F., "44ffe7a14117c3bdde82906080a810f477c6368d"))
+	::cAppId := AllTrim(cValToChar(SuperGetMV("MV_NUVAPP", .F., "9876")))
+	If Empty(::cAppId)
+		::cAppId := "9876"
+	EndIf
+
+	::cAccessToken := AllTrim(cValToChar(SuperGetMV("MV_NUVTOK", .F., "44ffe7a14117c3bdde82906080a810f477c6368d")))
+	If Empty(::cAccessToken)
+		::cAccessToken := "44ffe7a14117c3bdde82906080a810f477c6368d"
+	EndIf
 
 	// Header User-Agent e OBRIGATORIO na Nuvemshop sob pena de retorno HTTP 400 Bad Request
-	::cUserAgent   := AllTrim(SuperGetMV("MV_NUVUAGT", .F., "VMS Services (dev@vmstech.co)"))
+	::cUserAgent := AllTrim(cValToChar(SuperGetMV("MV_NUVUAGT", .F., "VMS Services (dev@vmstech.co)")))
+	If Empty(::cUserAgent)
+		::cUserAgent := "VMS Services (dev@vmstech.co)"
+	EndIf
 
 	// Auto-correcao defensiva: se informado apenas o e-mail puro, encapsula no formato exigido NomeApp (email)
 	If !Empty(::cUserAgent) .And. !("(" $ ::cUserAgent)
@@ -103,11 +127,9 @@ METHOD ConfigCredentials(cFil) CLASS NuvemAcesso
 	EndIf
 
 	// URL base final direcionada para a loja na versao UNSTABLE (necessaria para Custom Objects e Custom Fields)
-	If !Empty(::cStoreId)
-		::cURLBase := "https://api.nuvemshop.com.br/unstable/" + ::cStoreId
-	Else
-		::cURLBase := "https://api.nuvemshop.com.br/unstable"
-	EndIf
+	::cURLBase := "https://api.nuvemshop.com.br/unstable/" + ::cStoreId
+
+	ConOut("[NUVEMSHOP][CONFIG] Store ID: " + ::cStoreId + " | User-Agent: " + ::cUserAgent)
 Return .T.
 
 /*/{Protheus.doc} ExecuteRest
@@ -115,7 +137,9 @@ Executa chamadas HTTP REST via FWRest com tratamento automatico de cabecalhos e 
 /*/
 METHOD ExecuteRest(cPath, cMethod, cBody, aCustomHeaders) CLASS NuvemAcesso
 	Local oRest       := Nil
-	Local cFullURL    := ::cURLBase + cPath
+	Local cBaseHost   := "https://api.nuvemshop.com.br"
+	Local cFullPath   := ""
+	Local cFullURL    := ""
 	Local aHeaders    := {}
 	Local lSuccess    := .F.
 	Local nRetry      := 0
@@ -126,6 +150,15 @@ METHOD ExecuteRest(cPath, cMethod, cBody, aCustomHeaders) CLASS NuvemAcesso
 	Default cMethod       := "GET"
 	Default cBody         := ""
 	Default aCustomHeaders:= {}
+
+	// Garante que o path sempre inclua /unstable/{store_id} exigido pela API Nuvemshop
+	If "/unstable/" $ cPath
+		cFullPath := cPath
+	Else
+		cFullPath := "/unstable/" + ::cStoreId + IIf(Left(cPath, 1) == "/", cPath, "/" + cPath)
+	EndIf
+
+	cFullURL := cBaseHost + cFullPath
 
 	// Montagem dos headers padroes (Nuvemshop exige Authentication: bearer)
 	AAdd(aHeaders, "Authentication: bearer " + ::cAccessToken)
@@ -140,8 +173,8 @@ METHOD ExecuteRest(cPath, cMethod, cBody, aCustomHeaders) CLASS NuvemAcesso
 
 	While nRetry < nMaxRetry .And. !lSuccess
 		nRetry++
-		oRest := FWRest():New(::cURLBase)
-		oRest:setPath(cPath)
+		oRest := FWRest():New(cBaseHost)
+		oRest:setPath(cFullPath)
 
 		Do Case
 		Case Upper(cMethod) == "GET"
@@ -164,7 +197,7 @@ METHOD ExecuteRest(cPath, cMethod, cBody, aCustomHeaders) CLASS NuvemAcesso
 		::nLastStatus := Val(oRest:GetHTTPCode())
 		::cLastResult := oRest:GetResult()
 
-		ConOut("[NUVEMSHOP REST] " + cMethod + " " + cPath + " -> HTTP Status: " + cValToChar(::nLastStatus))
+		ConOut("[NUVEMSHOP REST] " + cMethod + " " + cFullPath + " -> HTTP Status: " + cValToChar(::nLastStatus))
 		If ::nLastStatus < 200 .Or. ::nLastStatus >= 300
 			ConOut("[NUVEMSHOP ERRO RETORNO] " + SubStr(::cLastResult, 1, 300))
 		EndIf

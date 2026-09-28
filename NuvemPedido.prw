@@ -42,6 +42,9 @@ METHOD CreatePedWeb() CLASS NuvemPedido
 	Local oJson     := JsonObject():New()
 	Local aPedidos  := {}
 	Local cMaxId    := ::cUltimoId
+	Local nI        := 0
+	Local jPed      := Nil
+	Local cId       := ""
 
 	cPath := "/orders?status=open&per_page=50"
 	If Val(::cUltimoId) > 0
@@ -98,11 +101,18 @@ Realiza a captura do pedido completo na Nuvemshop, resolve o seller e filial
 atraves do SellerIntegrationService e grava o pedido na tabela VT1 (status '').
 /*/
 METHOD SetIncPedido(cIdPedido) CLASS NuvemPedido
-	Local cLockKey  := "NUVEMPEDIDO" + cIdPedido
-	Local oJson     := JsonObject():New()
-	Local oEcPedido := Nil
-	Local jOrder    := Nil
-	Local lOk       := .F.
+	Local cLockKey        := "NUVEMPEDIDO" + cIdPedido
+	Local oJson           := JsonObject():New()
+	Local oEcPedido       := Nil
+	Local jOrder          := Nil
+	Local lOk             := .F.
+	Local cStatus         := ""
+	Local cStatusPgto     := ""
+	Local dDataCorte      := CtoD("//")
+	Local cDataPedido     := ""
+	Local dDataWeb        := CtoD("//")
+	Local oSellerService  := Nil
+	Local jSellerData     := Nil
 
 	// Garante exclusividade de processamento por pedido via mutex nomeado
 	If !LockByName(cLockKey, .T., .T., .T.)
@@ -160,6 +170,10 @@ METHOD SetIncPedido(cIdPedido) CLASS NuvemPedido
 				EndIf
 			Else
 				oEcPedido:cTipoPed := "SC5"
+			EndIf
+
+			If Empty(cFilAnt)
+				cFilAnt := AllTrim(cValToChar(SuperGetMV("MV_NUVFIL", .F., "03150001")))
 			EndIf
 
 			// 4. Trata cancelamento caso ja chegue cancelado na plataforma
@@ -269,6 +283,7 @@ Recupera o ID do Fulfillment Order associado ao pedido.
 METHOD GetFulfillmentOrderId(cOrderId) CLASS NuvemPedido
 	Local cFoId := ""
 	Local oJson := JsonObject():New()
+	Local jFo   := Nil
 
 	If ::ExecuteRest("/orders/" + cOrderId + "/fulfillment-orders", "GET")
 		oJson:FromJson(::cLastResult)

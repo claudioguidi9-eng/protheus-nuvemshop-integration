@@ -14,3 +14,20 @@ bin/
 Thumbs.db
 Desktop.ini
 .DS_Store
+
+# Node.js
+node_modules/
+npm-debug.log*
+
+# Grandes bases de dados e mídias temporárias
+*.xlsx
+*.ndjson
+*.traineddata
+*.jpg
+*.jpeg
+*.png
+*.zip
+*.csv
+vtex_data/
+migracao_scripts/Product/Nuvemshop/Token,json
+

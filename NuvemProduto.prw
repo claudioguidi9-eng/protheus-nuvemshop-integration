@@ -344,6 +344,9 @@ METHOD GetDadosProd(cCodProd) CLASS NuvemProduto
 	Local cCategoria  := ""
 	Local cCodGrupo   := ""
 	Local nPreco      := 0.00
+	Local nPrecoOrig  := 0.00
+	Local nPrecoPromo := 0.00
+	Local nPrecoTab   := 0.00
 	Local nEstoque    := 0
 	Local nPeso       := 0.000
 	Local nAltura     := 0.00
@@ -365,6 +368,8 @@ METHOD GetDadosProd(cCodProd) CLASS NuvemProduto
 	Local cQrySB2     := ""
 	Local cAliasDA1   := ""
 	Local cQryDA1     := ""
+	Local cCodBar     := ""
+	Local cTextoBusca := ""
 
 	// 1. Dados Basicos (SB1, SB5, SZ1, SBM)
 	DbSelectArea("SB1")
@@ -404,6 +409,13 @@ METHOD GetDadosProd(cCodProd) CLASS NuvemProduto
 	EndIf
 	cRefId   := AllTrim(SB1->B1_COD)
 
+	// Leitura de Codigo de Barras / EAN (SB1->B1_CODBAR ou B1_EAN13)
+	If SB1->(FieldPos("B1_CODBAR")) > 0 .And. !Empty(SB1->B1_CODBAR)
+		cCodBar := AllTrim(SB1->B1_CODBAR)
+	ElseIf SB1->(FieldPos("B1_EAN13")) > 0 .And. !Empty(SB1->B1_EAN13)
+		cCodBar := AllTrim(SB1->B1_EAN13)
+	EndIf
+
 	DbSelectArea("SB5")
 	SB5->(DbSetOrder(1))
 	If !SB5->(DbSeek(cFilEcom + cCodProd))
@@ -435,6 +447,72 @@ METHOD GetDadosProd(cCodProd) CLASS NuvemProduto
 		EndIf
 	EndIf
 
+	// Fallback inteligente de Dimensoes e Peso caso o Protheus nao tenha cadastrado na SB5
+	If nPeso <= 0 .Or. nAltura <= 0 .Or. nLargura <= 0 .Or. nComp <= 0
+		cTextoBusca := Upper(cNome + " " + cCategoria)
+		If "VELA" $ cTextoBusca
+			If nPeso <= 0;    nPeso    := 0.060; EndIf
+			If nLargura <= 0; nLargura := 5.00;  EndIf
+			If nAltura <= 0;  nAltura  := 10.00; EndIf
+			If nComp <= 0;    nComp    := 5.00;  EndIf
+		ElseIf "LAMPADA" $ cTextoBusca .Or. "LÂMPADA" $ cTextoBusca
+			If nPeso <= 0;    nPeso    := 0.040; EndIf
+			If nLargura <= 0; nLargura := 6.00;  EndIf
+			If nAltura <= 0;  nAltura  := 8.00;  EndIf
+			If nComp <= 0;    nComp    := 6.00;  EndIf
+		ElseIf "DISCO" $ cTextoBusca .And. "FREIO" $ cTextoBusca
+			If nPeso <= 0;    nPeso    := 5.500; EndIf
+			If nLargura <= 0; nLargura := 30.00; EndIf
+			If nAltura <= 0;  nAltura  := 8.00;  EndIf
+			If nComp <= 0;    nComp    := 30.00; EndIf
+		ElseIf "PASTILHA" $ cTextoBusca .Or. "SAPATA" $ cTextoBusca
+			If nPeso <= 0;    nPeso    := 1.400; EndIf
+			If nLargura <= 0; nLargura := 18.00; EndIf
+			If nAltura <= 0;  nAltura  := 10.00; EndIf
+			If nComp <= 0;    nComp    := 12.00; EndIf
+		ElseIf "AMORTECEDOR" $ cTextoBusca .Or. "BATENTE" $ cTextoBusca .Or. "COXIM" $ cTextoBusca
+			If nPeso <= 0;    nPeso    := 1.800; EndIf
+			If nLargura <= 0; nLargura := 18.00; EndIf
+			If nAltura <= 0;  nAltura  := 40.00; EndIf
+			If nComp <= 0;    nComp    := 18.00; EndIf
+		ElseIf "FILTRO" $ cTextoBusca
+			If nPeso <= 0;    nPeso    := 0.400; EndIf
+			If nLargura <= 0; nLargura := 15.00; EndIf
+			If nAltura <= 0;  nAltura  := 15.00; EndIf
+			If nComp <= 0;    nComp    := 15.00; EndIf
+		ElseIf "BATERIA" $ cTextoBusca
+			If nPeso <= 0;    nPeso    := 14.000; EndIf
+			If nLargura <= 0; nLargura := 25.00;  EndIf
+			If nAltura <= 0;  nAltura  := 20.00;  EndIf
+			If nComp <= 0;    nComp    := 18.00;  EndIf
+		ElseIf "RADIADOR" $ cTextoBusca
+			If nPeso <= 0;    nPeso    := 4.500; EndIf
+			If nLargura <= 0; nLargura := 50.00; EndIf
+			If nAltura <= 0;  nAltura  := 60.00; EndIf
+			If nComp <= 0;    nComp    := 15.00; EndIf
+		ElseIf "CORREIA" $ cTextoBusca .Or. "CABO" $ cTextoBusca
+			If nPeso <= 0;    nPeso    := 0.250; EndIf
+			If nLargura <= 0; nLargura := 15.00; EndIf
+			If nAltura <= 0;  nAltura  := 5.00;  EndIf
+			If nComp <= 0;    nComp    := 20.00; EndIf
+		ElseIf "EMBREAGEM" $ cTextoBusca
+			If nPeso <= 0;    nPeso    := 5.000; EndIf
+			If nLargura <= 0; nLargura := 30.00; EndIf
+			If nAltura <= 0;  nAltura  := 12.00; EndIf
+			If nComp <= 0;    nComp    := 30.00; EndIf
+		Else
+			If nPeso <= 0;    nPeso    := 0.800; EndIf
+			If nLargura <= 0; nLargura := 20.00; EndIf
+			If nAltura <= 0;  nAltura  := 15.00; EndIf
+			If nComp <= 0;    nComp    := 15.00; EndIf
+		EndIf
+	EndIf
+
+	// Garantia de Categoria padrao para que nenhum produto fique sem categoria
+	If Empty(cCategoria)
+		cCategoria := "Autopeças"
+	EndIf
+
 	If Empty(cDesc)
 		cDesc := cNome
 	EndIf
@@ -457,7 +535,7 @@ METHOD GetDadosProd(cCodProd) CLASS NuvemProduto
 	// Tentativa 1: Filial de e-commerce especifica (padrao '0315' ou configurada em MV_NUVFIL)
 	cQuery  := "SELECT TOP 1 PRECO, ESTOQUE FROM ECOMMERCE_PRODWEB "
 	cQuery  += " WHERE (PRODUTO = '" + cCodProd + "' OR RTRIM(PRODUTO) = '" + cCodProd + "' OR PRODUTO = '" + cCodPad + "') "
-	cQuery  += "   AND FILIAL = '" + cFilEcom + "' "
+	cQuery  += "   AND (FILIAL = '" + cFilEcom + "' OR FILIAL = '" + SubStr(cFilEcom, 1, 4) + "' OR FILIAL IN ('03150001', '0315', '04160001', '0416')) "
 	cQuery  := ChangeQuery(cQuery)
 	dbUseArea(.T., "TOPCONN", TcGenQry(,, cQuery), cAlias, .F., .T.)
 	If !(cAlias)->(Eof())
@@ -524,7 +602,7 @@ METHOD GetDadosProd(cCodProd) CLASS NuvemProduto
 		cQrySB2 += " FROM " + RetSqlName("SB2") + " SB2 "
 		cQrySB2 += " WHERE SB2.D_E_L_E_T_ = ' ' "
 		cQrySB2 += "   AND (SB2.B2_COD = '" + cCodProd + "' OR SB2.B2_COD = '" + cCodPad + "') "
-		cQrySB2 += "   AND (SB2.B2_FILIAL = '" + cFilEcom + "' OR SB2.B2_FILIAL = '" + cFilAnt + "' OR SB2.B2_FILIAL = '" + xFilial("SB2") + "') "
+		cQrySB2 += "   AND (SB2.B2_FILIAL IN ('" + cFilEcom + "', '" + SubStr(cFilEcom, 1, 4) + "', '03150001', '0315', '04160001', '0416') OR SB2.B2_FILIAL = '" + cFilAnt + "' OR SB2.B2_FILIAL = '" + xFilial("SB2") + "') "
 		cQrySB2 := ChangeQuery(cQrySB2)
 		dbUseArea(.T., "TOPCONN", TcGenQry(,, cQrySB2), cAliasSB2, .F., .T.)
 		If !(cAliasSB2)->(Eof()) .And. !Empty((cAliasSB2)->SALDO)
@@ -533,26 +611,45 @@ METHOD GetDadosProd(cCodProd) CLASS NuvemProduto
 		(cAliasSB2)->(dbCloseArea())
 	EndIf
 
-	// Fallback 1 de Preco: Leitura da Tabela de Precos DA1 caso venha zerado
-	If nPreco <= 0 .And. ChkFile("DA1")
+	// Fallback 1 de Preco: Leitura da Tabela de Precos DA1 caso venha zerado ou para verificar Preco de Tabela (De)
+	If ChkFile("DA1")
 		cAliasDA1 := GetNextAlias()
 		cQryDA1 := "SELECT DA1_PRCVEN "
 		cQryDA1 += " FROM " + RetSqlName("DA1") + " DA1 "
 		cQryDA1 += " WHERE DA1.D_E_L_E_T_ = ' ' "
 		cQryDA1 += "   AND (DA1.DA1_CODPRO = '" + cCodProd + "' OR DA1.DA1_CODPRO = '" + cCodPad + "') "
-		cQryDA1 += "   AND (DA1.DA1_FILIAL = '" + cFilEcom + "' OR DA1.DA1_FILIAL = '" + cFilAnt + "' OR DA1.DA1_FILIAL = '" + xFilial("DA1") + "') "
+		cQryDA1 += "   AND (DA1.DA1_FILIAL IN ('" + cFilEcom + "', '" + SubStr(cFilEcom, 1, 4) + "', '03150001', '0315', '04160001', '0416') OR DA1.DA1_FILIAL = '" + cFilAnt + "' OR DA1.DA1_FILIAL = '" + xFilial("DA1") + "') "
 		cQryDA1 += "   AND DA1.DA1_PRCVEN > 0 "
+		cQryDA1 += " ORDER BY DA1.DA1_PRCVEN DESC "
 		cQryDA1 := ChangeQuery(cQryDA1)
 		dbUseArea(.T., "TOPCONN", TcGenQry(,, cQryDA1), cAliasDA1, .F., .T.)
 		If !(cAliasDA1)->(Eof())
-			nPreco := (cAliasDA1)->DA1_PRCVEN
+			nPrecoTab := (cAliasDA1)->DA1_PRCVEN
 		EndIf
 		(cAliasDA1)->(dbCloseArea())
 	EndIf
 
 	// Fallback 2 de Preco: Campo B1_PRV1 na SB1
-	If nPreco <= 0 .And. SB1->(FieldPos("B1_PRV1")) > 0 .And. SB1->B1_PRV1 > 0
-		nPreco := SB1->B1_PRV1
+	If nPrecoTab <= 0 .And. SB1->(FieldPos("B1_PRV1")) > 0 .And. SB1->B1_PRV1 > 0
+		nPrecoTab := SB1->B1_PRV1
+	EndIf
+
+	// REGRA CRITICA DE E-COMMERCE / NUVEMSHOP:
+	// O preco promocional ('promotional_price' / "Por:") DEVE SER SEMPRE O MAIS BARATO!
+	// O preco normal ('price' / "De:") eh o preco de tabela (mais caro).
+	If nPrecoTab > 0 .And. nPreco > 0 .And. nPrecoTab > nPreco
+		// Tabela maior que preco de venda: Tabela = "De", Venda = "Por" (Promocional)
+		nPrecoOrig  := nPrecoTab
+		nPrecoPromo := nPreco
+	ElseIf nPreco > 0
+		nPrecoOrig  := nPreco
+		nPrecoPromo := 0.00
+	ElseIf nPrecoTab > 0
+		nPrecoOrig  := nPrecoTab
+		nPrecoPromo := 0.00
+	Else
+		nPrecoOrig  := 1.00
+		nPrecoPromo := 0.00
 	EndIf
 
 	// 3. Atributos Veiculares de Compatibilidade (Tabela Z08 - Produto x Aplicacao)
@@ -667,8 +764,10 @@ METHOD GetDadosProd(cCodProd) CLASS NuvemProduto
 	oData["marca"]        := cFabric
 	oData["categoria"]    := cCategoria
 	oData["grupo"]        := cCodGrupo
-	oData["preco"]        := nPreco
-	oData["estoque"]      := Int(Max(0, nEstoque))
+	oData["barcode"]           := cCodBar
+	oData["preco"]             := nPrecoOrig
+	oData["preco_promocional"] := nPrecoPromo
+	oData["estoque"]           := Int(Max(0, nEstoque))
 	oData["peso"]         := nPeso
 	oData["altura"]       := nAltura
 	oData["largura"]      := nLargura
@@ -678,12 +777,6 @@ METHOD GetDadosProd(cCodProd) CLASS NuvemProduto
 
 Return oData
 
-/*/{Protheus.doc} ExportProduct
-Orquestra o cadastro completo do produto na Nuvemshop:
-1. Coleta dados do Protheus
-2. Verifica se o SKU ja existe na Nuvemshop (idempotencia)
-3. Cria ou Atualiza o Produto
-4. Envia os Custom Fields na variante
 /*/{Protheus.doc} ExportProduct
 Orquestra o cadastro completo do produto na Nuvemshop:
 1. Valida elegibilidade B2C (SBZ->BZ_YB2C == 'S') salvo se lForce == .T.
@@ -706,8 +799,9 @@ METHOD ExportProduct(cCodProd, lForce) CLASS NuvemProduto
 	Local cSku          := ""
 	Local aCustomFields := {}
 	Local aImagens      := {}
-	Local cPrecoStr     := ""
-	Local cPesoStr      := ""
+	Local cPrecoStr      := ""
+	Local cPrecoPromoStr := ""
+	Local cPesoStr       := ""
 	Local nCatId        := 0
 	Local cCatJson      := ""
 	Local lSuccess      := .F.
@@ -721,8 +815,8 @@ METHOD ExportProduct(cCodProd, lForce) CLASS NuvemProduto
 		DbSelectArea("SBZ")
 		SBZ->(DbSetOrder(1)) // BZ_FILIAL + BZ_COD
 		If SBZ->(DbSeek(cFilEcom + cCodProd)) .Or. ;
-		   SBZ->(DbSeek(SubStr(cFilEcom, 1, 4) + cCodProd)) .Or. ;
-		   SBZ->(DbSeek(xFilial("SBZ") + cCodProd))
+				SBZ->(DbSeek(SubStr(cFilEcom, 1, 4) + cCodProd)) .Or. ;
+				SBZ->(DbSeek(xFilial("SBZ") + cCodProd))
 			If SBZ->(FieldPos("BZ_YB2C")) > 0
 				lIsB2C := (Upper(AllTrim(SBZ->BZ_YB2C)) == "S")
 			EndIf
@@ -740,12 +834,23 @@ METHOD ExportProduct(cCodProd, lForce) CLASS NuvemProduto
 		Return .F.
 	EndIf
 
+	// Regra de Negocio Fortbras: Pneus nao sao comercializados nesta loja Nuvemshop
+	If "PNEU" $ Upper(oProdData["nome"]) .Or. "PNEU" $ Upper(oProdData["descricao"]) .Or. "PNEU" $ Upper(oProdData["categoria"])
+		ConOut("[NUVEMSHOP][BLOQUEIO] Produto " + cCodProd + " (" + oProdData["nome"] + ") ignorado: PNEUS nao sao comercializados na loja Nuvemshop.")
+		Return .F.
+	EndIf
+
 	cSku          := oProdData["ref_id"]
 	aCustomFields := oProdData["custom_fields"]
 	aImagens      := oProdData["imagens"]
 
 	cPrecoStr     := AllTrim(Str(oProdData["preco"], 12, 2))
 	cPesoStr      := AllTrim(Str(oProdData["peso"], 10, 3))
+	If oProdData:HasProperty("preco_promocional") .And. oProdData["preco_promocional"] > 0 .And. oProdData["preco_promocional"] < oProdData["preco"]
+		cPrecoPromoStr := AllTrim(Str(oProdData["preco_promocional"], 12, 2))
+	Else
+		cPrecoPromoStr := ""
+	EndIf
 
 	// Resolve Categoria na Nuvemshop
 	If !Empty(oProdData["categoria"])
@@ -787,11 +892,19 @@ METHOD ExportProduct(cCodProd, lForce) CLASS NuvemProduto
 		If nVariantId > 0
 			cBodyVar := '{'
 			cBodyVar += '  "price": "' + cPrecoStr + '",'
+			If !Empty(cPrecoPromoStr)
+				cBodyVar += '  "promotional_price": "' + cPrecoPromoStr + '",'
+			Else
+				cBodyVar += '  "promotional_price": null,'
+			EndIf
 			cBodyVar += '  "stock": ' + cValToChar(oProdData["estoque"]) + ','
 			cBodyVar += '  "weight": "' + cPesoStr + '",'
 			cBodyVar += '  "height": "' + AllTrim(Str(oProdData["altura"], 10, 2)) + '",'
 			cBodyVar += '  "width": "' + AllTrim(Str(oProdData["largura"], 10, 2)) + '",'
 			cBodyVar += '  "depth": "' + AllTrim(Str(oProdData["comprimento"], 10, 2)) + '"'
+			If oProdData:HasProperty("barcode") .And. !Empty(oProdData["barcode"])
+				cBodyVar += ', "barcode": "' + oProdData["barcode"] + '"'
+			EndIf
 			cBodyVar += '}'
 
 			::UpdateVariant(nProdId, nVariantId, cBodyVar)
@@ -809,11 +922,19 @@ METHOD ExportProduct(cCodProd, lForce) CLASS NuvemProduto
 		cBody += '  "variants": [{'
 		cBody += '    "sku": "' + cSku + '",'
 		cBody += '    "price": "' + cPrecoStr + '",'
+		If !Empty(cPrecoPromoStr)
+			cBody += '    "promotional_price": "' + cPrecoPromoStr + '",'
+		Else
+			cBody += '    "promotional_price": null,'
+		EndIf
 		cBody += '    "stock": ' + cValToChar(oProdData["estoque"]) + ','
 		cBody += '    "weight": "' + cPesoStr + '",'
 		cBody += '    "height": "' + AllTrim(Str(oProdData["altura"], 10, 2)) + '",'
 		cBody += '    "width": "' + AllTrim(Str(oProdData["largura"], 10, 2)) + '",'
 		cBody += '    "depth": "' + AllTrim(Str(oProdData["comprimento"], 10, 2)) + '"'
+		If oProdData:HasProperty("barcode") .And. !Empty(oProdData["barcode"])
+			cBody += ',   "barcode": "' + oProdData["barcode"] + '"'
+		EndIf
 		cBody += '  }]'
 		cBody += '}'
 
@@ -1077,11 +1198,11 @@ METHOD ExportAllB2C(cFilialP, bProgress) CLASS NuvemProduto
 	cQuery += " FROM " + RetSqlName("SB1") + " SB1 "
 	cQuery += " INNER JOIN " + RetSqlName("SBZ") + " SBZ "
 	cQuery += "    ON SBZ.BZ_COD = SB1.B1_COD "
-	cQuery += "   AND (SBZ.BZ_FILIAL = '" + cFilEcom + "' OR SBZ.BZ_FILIAL = '" + SubStr(cFilEcom, 1, 4) + "' OR SBZ.BZ_FILIAL = '" + xFilial("SBZ") + "' OR SBZ.BZ_FILIAL = ' ') "
+	cQuery += "   AND (SBZ.BZ_FILIAL = '" + cFilEcom + "' OR SBZ.BZ_FILIAL = '" + SubStr(cFilEcom, 1, 4) + "' OR SBZ.BZ_FILIAL IN ('03150001', '0315', '04160001', '0416') OR SBZ.BZ_FILIAL = '" + xFilial("SBZ") + "' OR SBZ.BZ_FILIAL = ' ') "
 	cQuery += "   AND (SBZ.BZ_YB2C = 'S' OR SBZ.BZ_YB2C = 's') "
 	cQuery += "   AND SBZ.D_E_L_E_T_ = ' ' "
 	cQuery += " WHERE SB1.D_E_L_E_T_ = ' ' "
-	cQuery += "   AND (SB1.B1_FILIAL = '" + xFilial("SB1") + "' OR SB1.B1_FILIAL = '" + cFilEcom + "' OR SB1.B1_FILIAL = '" + SubStr(cFilEcom, 1, 4) + "' OR SB1.B1_FILIAL = ' ') "
+	cQuery += "   AND (SB1.B1_FILIAL = '" + xFilial("SB1") + "' OR SB1.B1_FILIAL = '" + cFilEcom + "' OR SB1.B1_FILIAL = '" + SubStr(cFilEcom, 1, 4) + "' OR SB1.B1_FILIAL IN ('03150001', '0315', '04160001', '0416') OR SB1.B1_FILIAL = ' ') "
 	cQuery += "   AND (SB1.B1_MSBLQL <> '1' OR SB1.B1_MSBLQL = ' ' OR SB1.B1_MSBLQL IS NULL) "
 	cQuery += " ORDER BY SB1.B1_COD "
 
@@ -1155,9 +1276,11 @@ METHOD SyncStockPrice(cCodProd) CLASS NuvemProduto
 	Local cVarId    := ""
 	Local cProdId   := ""
 	Local oCheckSku := Nil
-	Local oData     := Nil
-	Local nPreco    := 0
-	Local nEstoque  := 0
+	Local oData       := Nil
+	Local nPreco      := 0
+	Local nPrecoPromo := 0
+	Local nEstoque    := 0
+	Local cCodBar   := ""
 	Local cBodyVar  := ""
 	Local oRespVar  := Nil
 	Local lOk       := .F.
@@ -1167,53 +1290,64 @@ METHOD SyncStockPrice(cCodProd) CLASS NuvemProduto
 		Return .F.
 	EndIf
 
-	// 1. Verifica se ja possui de-para no Protheus (VT9/VTD)
-	cVarId  := ::GetVariantId(cCodProd)
-	cProdId := ::GetProductId(cCodProd)
+	// 1. Sempre consulta diretamente na Nuvemshop pelo SKU (Fonte da Verdade)
+	// Isso garante que se o produto foi recriado ou se os IDs mudaram, o Protheus sincroniza imediatamente
+	ConOut("[NUVEMSHOP][AUTO-BIND] Consultando SKU " + cCodProd + " na Nuvemshop...")
+	oCheckSku := ::CheckSku(cCodProd)
 
-	// 2. Se nao possui de-para, executa a Descoberta Automatica por SKU (Match com carga VTEX)
-	If Empty(cVarId) .Or. Empty(cProdId)
-		ConOut("[NUVEMSHOP][AUTO-BIND] Produto " + cCodProd + " sem vinculo local. Consultando SKU na Nuvemshop...")
-		oCheckSku := ::CheckSku(cCodProd)
-
-		If oCheckSku != Nil
-			cProdId := cValToChar(oCheckSku["id"])
-			If ValType(oCheckSku["variants"]) == "A" .And. Len(oCheckSku["variants"]) > 0
-				cVarId := cValToChar(oCheckSku["variants"][1]["id"])
-			EndIf
-
-			If !Empty(cProdId) .And. !Empty(cVarId)
-				// Grava o vínculo no de-para do Protheus
-				::GravaIdWEB(cCodProd, cProdId, cVarId)
-				ConOut("[NUVEMSHOP][AUTO-BIND] Vinculo gravado com sucesso para o SKU " + cCodProd + ": ProdID " + cProdId + " / VarID " + cVarId)
-			EndIf
-			FreeObj(oCheckSku)
-		Else
-			If ::nLastStatus == 404
-				ConOut("[NUVEMSHOP][AGUARDANDO VTEX] SKU " + cCodProd + " nao encontrado na Nuvemshop (404). Aguardando publicacao do catalogo pela VTEX.")
-			Else
-				ConOut("[NUVEMSHOP][ERRO] Falha ao consultar SKU " + cCodProd + ": " + ::GetLastError())
-			EndIf
-			Return .F.
+	If oCheckSku != Nil
+		cProdId := cValToChar(oCheckSku["id"])
+		If ValType(oCheckSku["variants"]) == "A" .And. Len(oCheckSku["variants"]) > 0
+			cVarId := cValToChar(oCheckSku["variants"][1]["id"])
 		EndIf
+		FreeObj(oCheckSku)
+
+		If !Empty(cProdId) .And. !Empty(cVarId)
+			// Atualiza/grava o vinculo no de-para do Protheus (VT9 e VTD)
+			::GravaIdWEB(cCodProd, cProdId, cVarId)
+			ConOut("[NUVEMSHOP][AUTO-BIND] Vinculo confirmado para o SKU " + cCodProd + ": ProdID " + cProdId + " / VarID " + cVarId)
+		EndIf
+	Else
+		// Fallback: se a consulta por SKU falhou, tenta recuperar do de-para local VT9 / VTD
+		cVarId  := ::GetVariantId(cCodProd)
+		cProdId := ::GetProductId(cCodProd)
 	EndIf
 
 	If Empty(cProdId) .Or. Empty(cVarId)
+		If ::nLastStatus == 404
+			ConOut("[NUVEMSHOP][AGUARDANDO VTEX] SKU " + cCodProd + " nao encontrado na Nuvemshop (404). Aguardando publicacao do catalogo pela VTEX.")
+		Else
+			ConOut("[NUVEMSHOP][ERRO] Falha ao consultar SKU " + cCodProd + ": " + ::GetLastError())
+		EndIf
 		Return .F.
 	EndIf
 
-	// 3. Coleta dados de Preco e Saldo da filial de e-commerce
+	// 2. Coleta dados de Preco e Saldo da filial de e-commerce
 	oData := ::GetDadosProd(cCodProd)
 	If oData != Nil
 		nPreco   := oData["preco"]
+		If oData:HasProperty("preco_promocional") .And. oData["preco_promocional"] > 0 .And. oData["preco_promocional"] < nPreco
+			nPrecoPromo := oData["preco_promocional"]
+		EndIf
 		nEstoque := oData["estoque"]
+		If oData:HasProperty("barcode") .And. !Empty(oData["barcode"])
+			cCodBar := oData["barcode"]
+		EndIf
 		FreeObj(oData)
 	EndIf
 
-	// 4. Envia atualizacao leve para a variante
+	// 3. Envia atualizacao leve para a variante
 	cBodyVar := '{'
 	cBodyVar += '  "price": "' + AllTrim(Str(nPreco, 12, 2)) + '",'
+	If nPrecoPromo > 0 .And. nPrecoPromo < nPreco
+		cBodyVar += '  "promotional_price": "' + AllTrim(Str(nPrecoPromo, 12, 2)) + '",'
+	Else
+		cBodyVar += '  "promotional_price": null,'
+	EndIf
 	cBodyVar += '  "stock": ' + cValToChar(nEstoque)
+	If !Empty(cCodBar)
+		cBodyVar += ', "barcode": "' + cCodBar + '"'
+	EndIf
 	cBodyVar += '}'
 
 	oRespVar := ::UpdateVariant(Val(cProdId), Val(cVarId), cBodyVar)
@@ -1287,11 +1421,11 @@ METHOD SyncAllStockPriceB2C(cFilialP, bProgress) CLASS NuvemProduto
 	cQuery += " FROM " + RetSqlName("SB1") + " SB1 "
 	cQuery += " INNER JOIN " + RetSqlName("SBZ") + " SBZ "
 	cQuery += "    ON SBZ.BZ_COD = SB1.B1_COD "
-	cQuery += "   AND (SBZ.BZ_FILIAL = '" + cFilEcom + "' OR SBZ.BZ_FILIAL = '" + SubStr(cFilEcom, 1, 4) + "' OR SBZ.BZ_FILIAL = '" + xFilial("SBZ") + "' OR SBZ.BZ_FILIAL = ' ') "
+	cQuery += "   AND (SBZ.BZ_FILIAL = '" + cFilEcom + "' OR SBZ.BZ_FILIAL = '" + SubStr(cFilEcom, 1, 4) + "' OR SBZ.BZ_FILIAL IN ('03150001', '0315', '04160001', '0416') OR SBZ.BZ_FILIAL = '" + xFilial("SBZ") + "' OR SBZ.BZ_FILIAL = ' ') "
 	cQuery += "   AND (SBZ.BZ_YB2C = 'S' OR SBZ.BZ_YB2C = 's') "
 	cQuery += "   AND SBZ.D_E_L_E_T_ = ' ' "
 	cQuery += " WHERE SB1.D_E_L_E_T_ = ' ' "
-	cQuery += "   AND (SB1.B1_FILIAL = '" + xFilial("SB1") + "' OR SB1.B1_FILIAL = '" + cFilEcom + "' OR SB1.B1_FILIAL = '" + SubStr(cFilEcom, 1, 4) + "' OR SB1.B1_FILIAL = ' ') "
+	cQuery += "   AND (SB1.B1_FILIAL = '" + xFilial("SB1") + "' OR SB1.B1_FILIAL = '" + cFilEcom + "' OR SB1.B1_FILIAL = '" + SubStr(cFilEcom, 1, 4) + "' OR SB1.B1_FILIAL IN ('03150001', '0315', '04160001', '0416') OR SB1.B1_FILIAL = ' ') "
 	cQuery += "   AND (SB1.B1_MSBLQL <> '1' OR SB1.B1_MSBLQL = ' ' OR SB1.B1_MSBLQL IS NULL) "
 	cQuery += " ORDER BY SB1.B1_COD "
 
