@@ -38,7 +38,8 @@ CLASS NuvemProduto FROM NuvemAcesso
 	METHOD SendImages(nProdId, aImages)
 	METHOD SetCustomFields(nVariantId, aCustomFields)
 	METHOD GetDadosProd(cCodProd)
-	METHOD GetOrCreateCategory(cCatName)
+	METHOD GetOrCreateCategory(cCatName, nParentId)
+	METHOD GetCatMarca(cMarca)
 	METHOD ExportProduct(cCodProd, lForce)
 	METHOD ExportAllB2C(cFilialP, bProgress)
 	METHOD SyncStockPrice(cCodProd)
@@ -54,7 +55,7 @@ METHOD New() CLASS NuvemProduto
 	_Super:New()
 	::nBatchSize := SuperGetMV("MV_NUVLOTE", .F., 50)
 	If ValType(::nBatchSize) == "C"
-		::nBatchSize := Val(::nBatchSize)
+		::nBatchSize := Val(AllTrim(::nBatchSize))
 	EndIf
 	If ValType(::nBatchSize) != "N" .Or. ::nBatchSize <= 0
 		::nBatchSize := 50
@@ -203,16 +204,19 @@ Return lSuccess
 /*/{Protheus.doc} GetOrCreateCategory
 Localiza o ID da categoria na Nuvemshop pelo nome (GET /categories)
 ou cria a categoria automaticamente caso nao exista (POST /categories).
+Se informado nParentId > 0, busca e cria como subcategoria filha.
 /*/
-METHOD GetOrCreateCategory(cCatName) CLASS NuvemProduto
+METHOD GetOrCreateCategory(cCatName, nParentId) CLASS NuvemProduto
 	Local nCatId   := 0
-	Local cPath    := "/categories"
+	Local cPath    := "/categories?per_page=200"
 	Local oCats    := Nil
 	Local nI       := 0
 	Local cBody    := ""
 	Local oNewCat  := Nil
 	Local cNameLim := AllTrim(cCatName)
 	Local cCatNome := ""
+
+	Default nParentId := 0
 
 	If Empty(cNameLim)
 		Return 0
@@ -227,7 +231,8 @@ METHOD GetOrCreateCategory(cCatName) CLASS NuvemProduto
 		If oCats:FromJson(::cLastResult) == Nil
 			If ValType(oCats) == "A"
 				For nI := 1 To Len(oCats)
-					If Upper(AllTrim(cValToChar(oCats[nI]["name"]["pt"]))) == Upper(cNameLim)
+					If (nParentId == 0 .Or. oCats[nI]["parent"] == nParentId) .And. ;
+							Upper(AllTrim(cValToChar(oCats[nI]["name"]["pt"]))) == Upper(cNameLim)
 						nCatId := oCats[nI]["id"]
 						Exit
 					EndIf
@@ -239,12 +244,18 @@ METHOD GetOrCreateCategory(cCatName) CLASS NuvemProduto
 
 	// 2. Se nao encontrou, cria a categoria na Nuvemshop
 	If nCatId == 0
-		cBody := '{"name": {"pt": "' + cCatNome + '"}}'
-		If ::Post(cPath, cBody) .And. (::nLastStatus == 200 .Or. ::nLastStatus == 201)
+		If nParentId > 0
+			cBody := '{"name": {"pt": "' + cCatNome + '"}, "parent": ' + cValToChar(nParentId) + '}'
+		Else
+			cBody := '{"name": {"pt": "' + cCatNome + '"}}'
+		EndIf
+
+		If ::Post("/categories", cBody) .And. (::nLastStatus == 200 .Or. ::nLastStatus == 201)
 			oNewCat := JsonObject():New()
 			If oNewCat:FromJson(::cLastResult) == Nil
 				nCatId := oNewCat["id"]
-				ConOut("[NUVEMSHOP] Categoria '" + cNameLim + "' criada com sucesso. ID: " + cValToChar(nCatId))
+				ConOut("[NUVEMSHOP] Categoria '" + cNameLim + "' criada com sucesso. ID: " + cValToChar(nCatId) + ;
+					IIf(nParentId > 0, " (Parent: " + cValToChar(nParentId) + ")", ""))
 			EndIf
 			FreeObj(oNewCat)
 		Else
@@ -252,6 +263,20 @@ METHOD GetOrCreateCategory(cCatName) CLASS NuvemProduto
 		EndIf
 	EndIf
 Return nCatId
+
+/*/{Protheus.doc} GetCatMarca
+Localiza ou cria a subcategoria da Marca (ex: "Mahle", "Bosch", "Controil")
+sob a categoria-pai "Marcas" (MV_NUVCMAR, padrao 41357159) na Nuvemshop.
+/*/
+METHOD GetCatMarca(cMarca) CLASS NuvemProduto
+	Local nParentId := SuperGetMV("MV_NUVCMAR", .F., "41357159")
+	If ValType(nParentId) == "C"
+		nParentId := Val(AllTrim(nParentId))
+	EndIf
+	If ValType(nParentId) != "N" .Or. nParentId <= 0
+		nParentId := 41357159
+	EndIf
+Return ::GetOrCreateCategory(cMarca, nParentId)
 
 
 /*/{Protheus.doc} SetCustomFields
@@ -279,7 +304,7 @@ METHOD SetCustomFields(nVariantId, aCustomFields) CLASS NuvemProduto
 			For nJ := 1 To Len(aCustomFields[nI][2])
 				cRef := aCustomFields[nI][2][nJ]
 				cSlugVal := SubStr(cRef, RAt("/", cRef) + 1)
-				::Post("/custom-objects/" + ::cNamespace + "/montadora/entries", '{"name": "' + Capital(StrTran(cSlugVal, "-", " ")) + '", "slug": "' + cSlugVal + '", "value": {"montadora": "' + Capital(StrTran(cSlugVal, "-", " ")) + '"}}')
+				::Post("/custom-objects/" + ::cNamespace + "/montadora/entries", '{"name": "' + Upper(StrTran(cSlugVal, "-", " ")) + '", "slug": "' + cSlugVal + '", "value": {"montadora": "' + Upper(StrTran(cSlugVal, "-", " ")) + '"}}')
 			Next nJ
 		ElseIf AllTrim(aCustomFields[nI][1]) == "modelos" .And. ValType(aCustomFields[nI][2]) == "A"
 			For nJ := 1 To Len(aCustomFields[nI][2])
@@ -363,13 +388,18 @@ METHOD GetDadosProd(cCodProd) CLASS NuvemProduto
 	Local cBitMap     := ""
 	Local cUrlBaseImg := ""
 	Local cCodPad     := ""
+	Local aAnosRef    := {}
+	Local nY          := 0
 	Local cFilEcom    := AllTrim(cValToChar(SuperGetMV("MV_NUVFIL", .F., "0315")))
-	Local cAliasSB2   := ""
-	Local cQrySB2     := ""
-	Local cAliasDA1   := ""
-	Local cQryDA1     := ""
 	Local cCodBar     := ""
 	Local cTextoBusca := ""
+	Local aMontSplit  := {}
+	Local aMontRef    := {}
+	Local aModSplit   := {}
+	Local aModRef     := {}
+	Local nIdx        := 0
+	Local cItemAux    := ""
+	Local cSlugAux    := ""
 
 	// 1. Dados Basicos (SB1, SB5, SZ1, SBM)
 	DbSelectArea("SB1")
@@ -452,330 +482,276 @@ METHOD GetDadosProd(cCodProd) CLASS NuvemProduto
 		cTextoBusca := Upper(cNome + " " + cCategoria)
 		If "VELA" $ cTextoBusca
 			If nPeso <= 0;    nPeso    := 0.060; EndIf
-			If nLargura <= 0; nLargura := 5.00;  EndIf
-			If nAltura <= 0;  nAltura  := 10.00; EndIf
-			If nComp <= 0;    nComp    := 5.00;  EndIf
-		ElseIf "LAMPADA" $ cTextoBusca .Or. "LÂMPADA" $ cTextoBusca
-			If nPeso <= 0;    nPeso    := 0.040; EndIf
-			If nLargura <= 0; nLargura := 6.00;  EndIf
-			If nAltura <= 0;  nAltura  := 8.00;  EndIf
-			If nComp <= 0;    nComp    := 6.00;  EndIf
-		ElseIf "DISCO" $ cTextoBusca .And. "FREIO" $ cTextoBusca
-			If nPeso <= 0;    nPeso    := 5.500; EndIf
-			If nLargura <= 0; nLargura := 30.00; EndIf
-			If nAltura <= 0;  nAltura  := 8.00;  EndIf
-			If nComp <= 0;    nComp    := 30.00; EndIf
-		ElseIf "PASTILHA" $ cTextoBusca .Or. "SAPATA" $ cTextoBusca
-			If nPeso <= 0;    nPeso    := 1.400; EndIf
-			If nLargura <= 0; nLargura := 18.00; EndIf
-			If nAltura <= 0;  nAltura  := 10.00; EndIf
-			If nComp <= 0;    nComp    := 12.00; EndIf
-		ElseIf "AMORTECEDOR" $ cTextoBusca .Or. "BATENTE" $ cTextoBusca .Or. "COXIM" $ cTextoBusca
-			If nPeso <= 0;    nPeso    := 1.800; EndIf
-			If nLargura <= 0; nLargura := 18.00; EndIf
-			If nAltura <= 0;  nAltura  := 40.00; EndIf
-			If nComp <= 0;    nComp    := 18.00; EndIf
-		ElseIf "FILTRO" $ cTextoBusca
-			If nPeso <= 0;    nPeso    := 0.400; EndIf
-			If nLargura <= 0; nLargura := 15.00; EndIf
-			If nAltura <= 0;  nAltura  := 15.00; EndIf
-			If nComp <= 0;    nComp    := 15.00; EndIf
-		ElseIf "BATERIA" $ cTextoBusca
-			If nPeso <= 0;    nPeso    := 14.000; EndIf
-			If nLargura <= 0; nLargura := 25.00;  EndIf
-			If nAltura <= 0;  nAltura  := 20.00;  EndIf
-			If nComp <= 0;    nComp    := 18.00;  EndIf
-		ElseIf "RADIADOR" $ cTextoBusca
-			If nPeso <= 0;    nPeso    := 4.500; EndIf
-			If nLargura <= 0; nLargura := 50.00; EndIf
-			If nAltura <= 0;  nAltura  := 60.00; EndIf
-			If nComp <= 0;    nComp    := 15.00; EndIf
-		ElseIf "CORREIA" $ cTextoBusca .Or. "CABO" $ cTextoBusca
-			If nPeso <= 0;    nPeso    := 0.250; EndIf
-			If nLargura <= 0; nLargura := 15.00; EndIf
-			If nAltura <= 0;  nAltura  := 5.00;  EndIf
-			If nComp <= 0;    nComp    := 20.00; EndIf
-		ElseIf "EMBREAGEM" $ cTextoBusca
-			If nPeso <= 0;    nPeso    := 5.000; EndIf
-			If nLargura <= 0; nLargura := 30.00; EndIf
-			If nAltura <= 0;  nAltura  := 12.00; EndIf
-			If nComp <= 0;    nComp    := 30.00; EndIf
-		Else
-			If nPeso <= 0;    nPeso    := 0.800; EndIf
-			If nLargura <= 0; nLargura := 20.00; EndIf
-			If nAltura <= 0;  nAltura  := 15.00; EndIf
-			If nComp <= 0;    nComp    := 15.00; EndIf
-		EndIf
-	EndIf
+				If nLargura <= 0; nLargura := 5.00;  EndIf
+					If nAltura <= 0;  nAltura  := 10.00; EndIf
+						If nComp <= 0;    nComp    := 5.00;  EndIf
+						ElseIf "LAMPADA" $ cTextoBusca .Or. "LÂMPADA" $ cTextoBusca
+							If nPeso <= 0;    nPeso    := 0.040; EndIf
+								If nLargura <= 0; nLargura := 6.00;  EndIf
+									If nAltura <= 0;  nAltura  := 8.00;  EndIf
+										If nComp <= 0;    nComp    := 6.00;  EndIf
+										ElseIf "DISCO" $ cTextoBusca .And. "FREIO" $ cTextoBusca
+											If nPeso <= 0;    nPeso    := 5.500; EndIf
+												If nLargura <= 0; nLargura := 30.00; EndIf
+													If nAltura <= 0;  nAltura  := 8.00;  EndIf
+														If nComp <= 0;    nComp    := 30.00; EndIf
+														ElseIf "PASTILHA" $ cTextoBusca .Or. "SAPATA" $ cTextoBusca
+															If nPeso <= 0;    nPeso    := 1.400; EndIf
+																If nLargura <= 0; nLargura := 18.00; EndIf
+																	If nAltura <= 0;  nAltura  := 10.00; EndIf
+																		If nComp <= 0;    nComp    := 12.00; EndIf
+																		ElseIf "AMORTECEDOR" $ cTextoBusca .Or. "BATENTE" $ cTextoBusca .Or. "COXIM" $ cTextoBusca
+																			If nPeso <= 0;    nPeso    := 1.800; EndIf
+																				If nLargura <= 0; nLargura := 18.00; EndIf
+																					If nAltura <= 0;  nAltura  := 40.00; EndIf
+																						If nComp <= 0;    nComp    := 18.00; EndIf
+																						ElseIf "FILTRO" $ cTextoBusca
+																							If nPeso <= 0;    nPeso    := 0.400; EndIf
+																								If nLargura <= 0; nLargura := 15.00; EndIf
+																									If nAltura <= 0;  nAltura  := 15.00; EndIf
+																										If nComp <= 0;    nComp    := 15.00; EndIf
+																										ElseIf "BATERIA" $ cTextoBusca
+																											If nPeso <= 0;    nPeso    := 14.000; EndIf
+																												If nLargura <= 0; nLargura := 25.00;  EndIf
+																													If nAltura <= 0;  nAltura  := 20.00;  EndIf
+																														If nComp <= 0;    nComp    := 18.00;  EndIf
+																														ElseIf "RADIADOR" $ cTextoBusca
+																															If nPeso <= 0;    nPeso    := 4.500; EndIf
+																																If nLargura <= 0; nLargura := 50.00; EndIf
+																																	If nAltura <= 0;  nAltura  := 60.00; EndIf
+																																		If nComp <= 0;    nComp    := 15.00; EndIf
+																																		ElseIf "CORREIA" $ cTextoBusca .Or. "CABO" $ cTextoBusca
+																																			If nPeso <= 0;    nPeso    := 0.250; EndIf
+																																				If nLargura <= 0; nLargura := 15.00; EndIf
+																																					If nAltura <= 0;  nAltura  := 5.00;  EndIf
+																																						If nComp <= 0;    nComp    := 20.00; EndIf
+																																						ElseIf "EMBREAGEM" $ cTextoBusca
+																																							If nPeso <= 0;    nPeso    := 5.000; EndIf
+																																								If nLargura <= 0; nLargura := 30.00; EndIf
+																																									If nAltura <= 0;  nAltura  := 12.00; EndIf
+																																										If nComp <= 0;    nComp    := 30.00; EndIf
+																																										Else
+																																											If nPeso <= 0;    nPeso    := 0.800; EndIf
+																																												If nLargura <= 0; nLargura := 20.00; EndIf
+																																													If nAltura <= 0;  nAltura  := 15.00; EndIf
+																																														If nComp <= 0;    nComp    := 15.00; EndIf
+																																														EndIf
+																																													EndIf
 
-	// Garantia de Categoria padrao para que nenhum produto fique sem categoria
-	If Empty(cCategoria)
-		cCategoria := "Autopeças"
-	EndIf
+																																													// Garantia de Categoria padrao para que nenhum produto fique sem categoria
+																																													If Empty(cCategoria)
+																																														cCategoria := "Autopeças"
+																																													EndIf
 
-	If Empty(cDesc)
-		cDesc := cNome
-	EndIf
+																																													If Empty(cDesc)
+																																														cDesc := cNome
+																																													EndIf
 
-	// Sanitizacao rigorosa para garantir JSON valido sem quebras de linha ou aspas soltas
-	cNome := StrTran(cNome, "\", "\\")
-	cNome := StrTran(cNome, '"', '\"')
-	cNome := StrTran(cNome, Chr(13), "")
-	cNome := StrTran(cNome, Chr(10), " ")
+																																													// Sanitizacao rigorosa para garantir JSON valido sem quebras de linha ou aspas soltas
+																																													cNome := StrTran(cNome, "\", "\\")
+																																													cNome := StrTran(cNome, '"', '\"')
+																																													cNome := StrTran(cNome, Chr(13), "")
+																																													cNome := StrTran(cNome, Chr(10), " ")
 
-	cDesc := StrTran(cDesc, "\", "\\")
-	cDesc := StrTran(cDesc, '"', '\"')
-	cDesc := StrTran(cDesc, Chr(13), "")
-	cDesc := StrTran(cDesc, Chr(10), " ")
+																																													cDesc := StrTran(cDesc, "\", "\\")
+																																													cDesc := StrTran(cDesc, '"', '\"')
+																																													cDesc := StrTran(cDesc, Chr(13), "")
+																																													cDesc := StrTran(cDesc, Chr(10), " ")
 
-	// 2. Preco e Saldo Consolidado da View ECOMMERCE_PRODWEB
-	cCodPad := AvKey(cCodProd, "B1_COD")
-	cAlias  := GetNextAlias()
+																																													// 2. Preco e Saldo da View ECOMMERCE_PRODWEB (Single Source of Truth)
+																																													// A view ja contempla armazens validos de e-commerce, reservas de outros canais,
+																																													// estoque de seguranca (buffer de corte) e regras fiscais/B2C da Fortbras.
+																																													cCodPad := AvKey(cCodProd, "B1_COD")
+																																													cAlias  := GetNextAlias()
 
-	// Tentativa 1: Filial de e-commerce especifica (padrao '0315' ou configurada em MV_NUVFIL)
-	cQuery  := "SELECT TOP 1 PRECO, ESTOQUE FROM ECOMMERCE_PRODWEB "
-	cQuery  += " WHERE (PRODUTO = '" + cCodProd + "' OR RTRIM(PRODUTO) = '" + cCodProd + "' OR PRODUTO = '" + cCodPad + "') "
-	cQuery  += "   AND (FILIAL = '" + cFilEcom + "' OR FILIAL = '" + SubStr(cFilEcom, 1, 4) + "' OR FILIAL IN ('03150001', '0315', '04160001', '0416')) "
-	cQuery  := ChangeQuery(cQuery)
-	dbUseArea(.T., "TOPCONN", TcGenQry(,, cQuery), cAlias, .F., .T.)
-	If !(cAlias)->(Eof())
-		nPreco   := (cAlias)->PRECO
-		nEstoque := (cAlias)->ESTOQUE
-	EndIf
-	(cAlias)->(dbCloseArea())
+																																													cQuery  := "SELECT PRECO, ESTOQUE FROM ECOMMERCE_PRODWEB "
+																																													cQuery  += " WHERE (PRODUTO = '" + cCodProd + "' OR RTRIM(PRODUTO) = '" + cCodProd + "' OR PRODUTO = '" + cCodPad + "') "
+																																													cQuery  += "   AND (FILIAL = '" + cFilEcom + "' OR FILIAL = '" + SubStr(cFilEcom, 1, 4) + "' OR FILIAL = '" + PadR(cFilEcom, 8) + "') "
+																																													cQuery  := ChangeQuery(cQuery)
+																																													dbUseArea(.T., "TOPCONN", TcGenQry(,, cQuery), cAlias, .F., .T.)
+																																													If !(cAlias)->(Eof())
+																																														nPreco   := (cAlias)->PRECO
+																																														nEstoque := Max(0, Int((cAlias)->ESTOQUE))
+																																													Else
+																																														// Se o produto nao existe na view para esta filial, ele nao esta ativo para venda no e-commerce
+																																														nPreco   := 0.00
+																																														nEstoque := 0
+																																													EndIf
+																																													(cAlias)->(dbCloseArea())
 
-	// Tentativa 2: Caso a filial logada nao tenha preco/saldo, busca na filial B2C com PRECO > 0
-	If nPreco <= 0
-		cAlias := GetNextAlias()
-		cQuery := "SELECT TOP 1 PRECO, ESTOQUE FROM ECOMMERCE_PRODWEB "
-		cQuery += " WHERE (PRODUTO = '" + cCodProd + "' OR RTRIM(PRODUTO) = '" + cCodProd + "' OR PRODUTO = '" + cCodPad + "') "
-		cQuery += "   AND B2C = 'S' "
-		cQuery += "   AND PRECO > 0 "
-		cQuery += " ORDER BY PRECO DESC "
-		cQuery := ChangeQuery(cQuery)
-		dbUseArea(.T., "TOPCONN", TcGenQry(,, cQuery), cAlias, .F., .T.)
-		If !(cAlias)->(Eof())
-			nPreco   := (cAlias)->PRECO
-			If nEstoque <= 0
-				nEstoque := (cAlias)->ESTOQUE
-			EndIf
-		EndIf
-		(cAlias)->(dbCloseArea())
-	EndIf
+																																													// Se o preco na view for zerado ou invalido (<= 0), forca estoque a 0 para impedir venda com preco incorreto
+																																													If nPreco <= 0
+																																														nEstoque    := 0
+																																														nPrecoOrig  := 0.00
+																																														nPrecoPromo := 0.00
+																																													Else
+																																														nPrecoOrig  := nPreco
+																																														nPrecoPromo := 0.00
+																																													EndIf
 
-	// Tentativa 3: Se ainda zerado, busca em qualquer filial da view com PRECO > 0
-	If nPreco <= 0
-		cAlias := GetNextAlias()
-		cQuery := "SELECT TOP 1 PRECO, ESTOQUE FROM ECOMMERCE_PRODWEB "
-		cQuery += " WHERE (PRODUTO = '" + cCodProd + "' OR RTRIM(PRODUTO) = '" + cCodProd + "' OR PRODUTO = '" + cCodPad + "') "
-		cQuery += "   AND PRECO > 0 "
-		cQuery += " ORDER BY PRECO DESC "
-		cQuery := ChangeQuery(cQuery)
-		dbUseArea(.T., "TOPCONN", TcGenQry(,, cQuery), cAlias, .F., .T.)
-		If !(cAlias)->(Eof())
-			nPreco   := (cAlias)->PRECO
-			If nEstoque <= 0
-				nEstoque := (cAlias)->ESTOQUE
-			EndIf
-		EndIf
-		(cAlias)->(dbCloseArea())
-	EndIf
+																																													// 3. Atributos Veiculares de Compatibilidade (Tabela Z08 - Produto x Aplicacao)
+																																													If ChkFile("Z08")
+																																														DbSelectArea("Z08")
+																																														Z08->(DbSetOrder(1)) // Z08_FILIAL + Z08_COD + Z08_MARCA + Z08_MODELO + ...
+																																														If !Z08->(DbSeek(cFilEcom + cCodProd))
+																																															Z08->(DbSeek(xFilial("Z08") + cCodProd))
+																																														EndIf
+																																														If Z08->(Found())
+																																															cMontadora := AllTrim(Z08->Z08_MARCA)
+																																															cModelo    := AllTrim(Z08->Z08_MODELO)
+																																															cAnoDe     := AllTrim(Z08->Z08_ANODE)
+																																															cAnoAte    := AllTrim(Z08->Z08_ANOATE)
+																																															cVersao    := AllTrim(Z08->Z08_MOTOR)
+																																															cAplica    := AllTrim(Z08->Z08_APLICA)
 
-	// Consolidacao de Estoque: Se o estoque da filial veio 0, soma o estoque B2C de todas as filiais
-	If nEstoque <= 0
-		cAlias := GetNextAlias()
-		cQuery := "SELECT SUM(ESTOQUE) AS SALDO_TOTAL FROM ECOMMERCE_PRODWEB "
-		cQuery += " WHERE (PRODUTO = '" + cCodProd + "' OR RTRIM(PRODUTO) = '" + cCodProd + "' OR PRODUTO = '" + cCodPad + "') "
-		cQuery += "   AND B2C = 'S' "
-		cQuery := ChangeQuery(cQuery)
-		dbUseArea(.T., "TOPCONN", TcGenQry(,, cQuery), cAlias, .F., .T.)
-		If !(cAlias)->(Eof()) .And. !Empty((cAlias)->SALDO_TOTAL)
-			nEstoque := Max(0, Int((cAlias)->SALDO_TOTAL))
-		EndIf
-		(cAlias)->(dbCloseArea())
-	EndIf
+																																															If !Empty(cAnoDe) .And. !Empty(cAnoAte)
+																																																cFaixaAno := cAnoDe + " a " + cAnoAte
+																																															ElseIf !Empty(cAnoDe)
+																																																cFaixaAno := cAnoDe
+																																															EndIf
+																																														EndIf
+																																													EndIf
 
-	// Fallback 1 de Estoque: Saldo Disponivel na tabela SB2 caso continue zerado
-	If nEstoque <= 0 .And. ChkFile("SB2")
-		cAliasSB2 := GetNextAlias()
-		cQrySB2 := "SELECT SUM(B2_QATU - B2_RESERVA) AS SALDO "
-		cQrySB2 += " FROM " + RetSqlName("SB2") + " SB2 "
-		cQrySB2 += " WHERE SB2.D_E_L_E_T_ = ' ' "
-		cQrySB2 += "   AND (SB2.B2_COD = '" + cCodProd + "' OR SB2.B2_COD = '" + cCodPad + "') "
-		cQrySB2 += "   AND (SB2.B2_FILIAL IN ('" + cFilEcom + "', '" + SubStr(cFilEcom, 1, 4) + "', '03150001', '0315', '04160001', '0416') OR SB2.B2_FILIAL = '" + cFilAnt + "' OR SB2.B2_FILIAL = '" + xFilial("SB2") + "') "
-		cQrySB2 := ChangeQuery(cQrySB2)
-		dbUseArea(.T., "TOPCONN", TcGenQry(,, cQrySB2), cAliasSB2, .F., .T.)
-		If !(cAliasSB2)->(Eof()) .And. !Empty((cAliasSB2)->SALDO)
-			nEstoque := Max(0, Int((cAliasSB2)->SALDO))
-		EndIf
-		(cAliasSB2)->(dbCloseArea())
-	EndIf
+																																													// 4. Numero de Peca / Codigo Original (Tabela Z09)
+																																													If ChkFile("Z09")
+																																														DbSelectArea("Z09")
+																																														Z09->(DbSetOrder(1)) // Z09_FILIAL + Z09_COD + Z09_CODORI
+																																														If !Z09->(DbSeek(cFilEcom + cCodProd))
+																																															Z09->(DbSeek(xFilial("Z09") + cCodProd))
+																																														EndIf
+																																														If Z09->(Found())
+																																															cNumPeca := AllTrim(Z09->Z09_CODORI)
+																																														EndIf
+																																													EndIf
+																																													If Empty(cNumPeca) .And. SB1->(FieldPos("B1_CODFAB")) > 0 .And. !Empty(SB1->B1_CODFAB)
+																																														cNumPeca := AllTrim(SB1->B1_CODFAB)
+																																													EndIf
 
-	// Fallback 1 de Preco: Leitura da Tabela de Precos DA1 caso venha zerado ou para verificar Preco de Tabela (De)
-	If ChkFile("DA1")
-		cAliasDA1 := GetNextAlias()
-		cQryDA1 := "SELECT DA1_PRCVEN "
-		cQryDA1 += " FROM " + RetSqlName("DA1") + " DA1 "
-		cQryDA1 += " WHERE DA1.D_E_L_E_T_ = ' ' "
-		cQryDA1 += "   AND (DA1.DA1_CODPRO = '" + cCodProd + "' OR DA1.DA1_CODPRO = '" + cCodPad + "') "
-		cQryDA1 += "   AND (DA1.DA1_FILIAL IN ('" + cFilEcom + "', '" + SubStr(cFilEcom, 1, 4) + "', '03150001', '0315', '04160001', '0416') OR DA1.DA1_FILIAL = '" + cFilAnt + "' OR DA1.DA1_FILIAL = '" + xFilial("DA1") + "') "
-		cQryDA1 += "   AND DA1.DA1_PRCVEN > 0 "
-		cQryDA1 += " ORDER BY DA1.DA1_PRCVEN DESC "
-		cQryDA1 := ChangeQuery(cQryDA1)
-		dbUseArea(.T., "TOPCONN", TcGenQry(,, cQryDA1), cAliasDA1, .F., .T.)
-		If !(cAliasDA1)->(Eof())
-			nPrecoTab := (cAliasDA1)->DA1_PRCVEN
-		EndIf
-		(cAliasDA1)->(dbCloseArea())
-	EndIf
+																																													// Monta a lista de Custom Fields para a Nuvemshop alinhado aos slugs oficiais cadastrados
+																																													AAdd(aCustomFlds, {"codigo-fortbras", cCodProd})
 
-	// Fallback 2 de Preco: Campo B1_PRV1 na SB1
-	If nPrecoTab <= 0 .And. SB1->(FieldPos("B1_PRV1")) > 0 .And. SB1->B1_PRV1 > 0
-		nPrecoTab := SB1->B1_PRV1
-	EndIf
+																																													If !Empty(cAnoDe)
+																																														AAdd(aCustomFlds, {"ano-inicial", cAnoDe})
+																																													EndIf
+																																													If !Empty(cAnoAte)
+																																														AAdd(aCustomFlds, {"ano-final", cAnoAte})
+																																													EndIf
 
-	// REGRA CRITICA DE E-COMMERCE / NUVEMSHOP:
-	// O preco promocional ('promotional_price' / "Por:") DEVE SER SEMPRE O MAIS BARATO!
-	// O preco normal ('price' / "De:") eh o preco de tabela (mais caro).
-	If nPrecoTab > 0 .And. nPreco > 0 .And. nPrecoTab > nPreco
-		// Tabela maior que preco de venda: Tabela = "De", Venda = "Por" (Promocional)
-		nPrecoOrig  := nPrecoTab
-		nPrecoPromo := nPreco
-	ElseIf nPreco > 0
-		nPrecoOrig  := nPreco
-		nPrecoPromo := 0.00
-	ElseIf nPrecoTab > 0
-		nPrecoOrig  := nPrecoTab
-		nPrecoPromo := 0.00
-	Else
-		nPrecoOrig  := 1.00
-		nPrecoPromo := 0.00
-	EndIf
+																																													// Gera lista de referencias para o campo de caixinhas "Anos compatíveis" (ref[])
+																																													If !Empty(cAnoDe) .And. !Empty(cAnoAte) .And. Val(cAnoDe) > 0 .And. Val(cAnoAte) >= Val(cAnoDe)
+																																														aAnosRef := {}
+																																														For nY := Val(cAnoDe) To Val(cAnoAte)
+																																															AAdd(aAnosRef, "demofortbras/ano/_" + cValToChar(nY))
+																																														Next nY
+																																														If Len(aAnosRef) > 0 .And. Len(aAnosRef) <= 45
+																																															AAdd(aCustomFlds, {"anos", aAnosRef})
+																																														EndIf
+																																													ElseIf !Empty(cAnoDe) .And. Val(cAnoDe) > 0
+																																														AAdd(aCustomFlds, {"anos", {"demofortbras/ano/_" + cValToChar(Val(cAnoDe))}})
+																																													EndIf
+																																													If !Empty(cAplica)
+																																														AAdd(aCustomFlds, {"aplicacao", cAplica})
+																																													Else
+																																														AAdd(aCustomFlds, {"aplicacao", cDesc})
+																																													EndIf
+																																													If !Empty(cMontadora)
+																																														aMontSplit := StrTokArr(cMontadora, ",;/")
+																																														aMontRef   := {}
+																																														For nIdx := 1 To Len(aMontSplit)
+																																															cItemAux := AllTrim(aMontSplit[nIdx])
+																																															If !Empty(cItemAux)
+																																																cSlugAux := Lower(StrTran(cItemAux, " ", "-"))
+																																																cSlugAux := StrTran(cSlugAux, ".", "")
+																																																cSlugAux := StrTran(cSlugAux, "/", "-")
+																																																AAdd(aMontRef, "demofortbras/montadora/" + cSlugAux)
+																																															EndIf
+																																														Next nIdx
+																																														If Len(aMontRef) > 0
+																																															AAdd(aCustomFlds, {"montadoras", aMontRef})
+																																														EndIf
+																																													EndIf
+																																													If !Empty(cModelo)
+																																														aModSplit := StrTokArr(cModelo, ",;/")
+																																														aModRef   := {}
+																																														For nIdx := 1 To Len(aModSplit)
+																																															cItemAux := AllTrim(aModSplit[nIdx])
+																																															If !Empty(cItemAux)
+																																																cSlugAux := Lower(StrTran(cItemAux, " ", "-"))
+																																																cSlugAux := StrTran(cSlugAux, ".", "")
+																																																cSlugAux := StrTran(cSlugAux, "/", "-")
+																																																AAdd(aModRef, "demofortbras/modelo/" + cSlugAux)
+																																															EndIf
+																																														Next nIdx
+																																														If Len(aModRef) > 0
+																																															AAdd(aCustomFlds, {"modelos", aModRef})
+																																														EndIf
+																																													EndIf
+																																													If !Empty(cNumPeca)
+																																														AAdd(aCustomFlds, {"terminal-de-direcao", cNumPeca})
+																																													EndIf
 
-	// 3. Atributos Veiculares de Compatibilidade (Tabela Z08 - Produto x Aplicacao)
-	If ChkFile("Z08")
-		DbSelectArea("Z08")
-		Z08->(DbSetOrder(1)) // Z08_FILIAL + Z08_COD + Z08_MARCA + Z08_MODELO + ...
-		If !Z08->(DbSeek(cFilEcom + cCodProd))
-			Z08->(DbSeek(xFilial("Z08") + cCodProd))
-		EndIf
-		If Z08->(Found())
-			cMontadora := AllTrim(Z08->Z08_MARCA)
-			cModelo    := AllTrim(Z08->Z08_MODELO)
-			cAnoDe     := AllTrim(Z08->Z08_ANODE)
-			cAnoAte    := AllTrim(Z08->Z08_ANOATE)
-			cVersao    := AllTrim(Z08->Z08_MOTOR)
-			cAplica    := AllTrim(Z08->Z08_APLICA)
+																																													// 5. Coleta de Imagens do Produto (SB1->B1_BITMAP, MV_NUVIMG, ZZ_VX3995 e SZ1)
+																																													cUrlBaseImg := AllTrim(cValToChar(SuperGetMV("MV_NUVIMG", .F., SuperGetMV("ZZ_VX3995", .F., "https://b2b.fortbras.com.br/imagens/"))))
+																																													If !Empty(cUrlBaseImg) .And. Right(cUrlBaseImg, 1) != "/"
+																																														cUrlBaseImg += "/"
+																																													EndIf
 
-			If !Empty(cAnoDe) .And. !Empty(cAnoAte)
-				cFaixaAno := cAnoDe + " a " + cAnoAte
-			ElseIf !Empty(cAnoDe)
-				cFaixaAno := cAnoDe
-			EndIf
-		EndIf
-	EndIf
+																																													If SB1->(FieldPos("B1_BITMAP")) > 0 .And. !Empty(SB1->B1_BITMAP)
+																																														cBitMap := AllTrim(SB1->B1_BITMAP)
+																																														If Lower(SubStr(cBitMap, 1, 4)) == "http"
+																																															AAdd(aImagens, cBitMap)
+																																														Else
+																																															If !Empty(cUrlBaseImg)
+																																																If Lower(Right(cBitMap, 4)) $ ".jpg|.png|.gif|.webp"
+																																																	AAdd(aImagens, cUrlBaseImg + cBitMap)
+																																																Else
+																																																	AAdd(aImagens, cUrlBaseImg + cBitMap + ".jpg")
+																																																EndIf
+																																															Else
+																																																AAdd(aImagens, cBitMap)
+																																															EndIf
+																																														EndIf
+																																													EndIf
 
-	// 4. Numero de Peca / Codigo Original (Tabela Z09)
-	If ChkFile("Z09")
-		DbSelectArea("Z09")
-		Z09->(DbSetOrder(1)) // Z09_FILIAL + Z09_COD + Z09_CODORI
-		If !Z09->(DbSeek(cFilEcom + cCodProd))
-			Z09->(DbSeek(xFilial("Z09") + cCodProd))
-		EndIf
-		If Z09->(Found())
-			cNumPeca := AllTrim(Z09->Z09_CODORI)
-		EndIf
-	EndIf
-	If Empty(cNumPeca) .And. SB1->(FieldPos("B1_CODFAB")) > 0 .And. !Empty(SB1->B1_CODFAB)
-		cNumPeca := AllTrim(SB1->B1_CODFAB)
-	EndIf
+																																													// Adiciona tambem a foto padrao pelo codigo do produto caso nao exista na lista
+																																													If !Empty(cUrlBaseImg)
+																																														AAdd(aImagens, cUrlBaseImg + cCodProd + "_01.jpg")
+																																													EndIf
 
-	// Monta a lista de Custom Fields para a Nuvemshop alinhado aos slugs oficiais cadastrados
-	AAdd(aCustomFlds, {"codigo-fortbras", cCodProd})
+																																													If ChkFile("SZ1")
+																																														DbSelectArea("SZ1")
+																																														SZ1->(DbSetOrder(1))
+																																														If SZ1->(DbSeek(xFilial("SZ1") + cCodProd))
+																																															If SZ1->(FieldPos("Z1_URLIMG")) > 0 .And. !Empty(SZ1->Z1_URLIMG)
+																																																AAdd(aImagens, AllTrim(SZ1->Z1_URLIMG))
+																																															EndIf
+																																															If SZ1->(FieldPos("Z1_FOTO")) > 0 .And. !Empty(SZ1->Z1_FOTO)
+																																																AAdd(aImagens, AllTrim(SZ1->Z1_FOTO))
+																																															EndIf
+																																														EndIf
+																																													EndIf
 
-	If !Empty(cAnoDe)
-		AAdd(aCustomFlds, {"ano-inicial", cAnoDe})
-	EndIf
-	If !Empty(cAnoAte)
-		AAdd(aCustomFlds, {"ano-final", cAnoAte})
-	EndIf
-	If !Empty(cAplica)
-		AAdd(aCustomFlds, {"aplicacao", cAplica})
-	Else
-		AAdd(aCustomFlds, {"aplicacao", cDesc})
-	EndIf
-	If !Empty(cMontadora)
-		AAdd(aCustomFlds, {"montadoras", {"demofortbras/montadora/" + Lower(StrTran(AllTrim(cMontadora), " ", "-"))}})
-	EndIf
-	If !Empty(cModelo)
-		AAdd(aCustomFlds, {"modelos", {"demofortbras/modelo/" + Lower(StrTran(AllTrim(cModelo), " ", "-"))}})
-	EndIf
-	If !Empty(cNumPeca)
-		AAdd(aCustomFlds, {"terminal-de-direcao", cNumPeca})
-	EndIf
+																																													// Retorna objeto estruturado
+																																													oData := JsonObject():New()
+																																													oData["codigo"]       := cCodProd
+																																													oData["ref_id"]       := cRefId
+																																													oData["nome"]         := cNome
+																																													oData["descricao"]    := cDesc
+																																													oData["marca"]        := cFabric
+																																													oData["categoria"]    := cCategoria
+																																													oData["grupo"]        := cCodGrupo
+																																													oData["barcode"]           := cCodBar
+																																													oData["preco"]             := nPrecoOrig
+																																													oData["preco_promocional"] := nPrecoPromo
+																																													oData["estoque"]           := Int(Max(0, nEstoque))
+																																													oData["peso"]         := nPeso
+																																													oData["altura"]       := nAltura
+																																													oData["largura"]      := nLargura
+																																													oData["comprimento"]  := nComp
+																																													oData["custom_fields"]:= aCustomFlds
+																																													oData["imagens"]      := aImagens
 
-	// 5. Coleta de Imagens do Produto (SB1->B1_BITMAP, MV_NUVIMG, ZZ_VX3995 e SZ1)
-	cUrlBaseImg := AllTrim(cValToChar(SuperGetMV("MV_NUVIMG", .F., SuperGetMV("ZZ_VX3995", .F., "https://b2b.fortbras.com.br/imagens/"))))
-	If !Empty(cUrlBaseImg) .And. Right(cUrlBaseImg, 1) != "/"
-		cUrlBaseImg += "/"
-	EndIf
-
-	If SB1->(FieldPos("B1_BITMAP")) > 0 .And. !Empty(SB1->B1_BITMAP)
-		cBitMap := AllTrim(SB1->B1_BITMAP)
-		If Lower(SubStr(cBitMap, 1, 4)) == "http"
-			AAdd(aImagens, cBitMap)
-		Else
-			If !Empty(cUrlBaseImg)
-				If Lower(Right(cBitMap, 4)) $ ".jpg|.png|.gif|.webp"
-					AAdd(aImagens, cUrlBaseImg + cBitMap)
-				Else
-					AAdd(aImagens, cUrlBaseImg + cBitMap + ".jpg")
-				EndIf
-			Else
-				AAdd(aImagens, cBitMap)
-			EndIf
-		EndIf
-	EndIf
-
-	// Adiciona tambem a foto padrao pelo codigo do produto caso nao exista na lista
-	If !Empty(cUrlBaseImg)
-		AAdd(aImagens, cUrlBaseImg + cCodProd + "_01.jpg")
-	EndIf
-
-	If ChkFile("SZ1")
-		DbSelectArea("SZ1")
-		SZ1->(DbSetOrder(1))
-		If SZ1->(DbSeek(xFilial("SZ1") + cCodProd))
-			If SZ1->(FieldPos("Z1_URLIMG")) > 0 .And. !Empty(SZ1->Z1_URLIMG)
-				AAdd(aImagens, AllTrim(SZ1->Z1_URLIMG))
-			EndIf
-			If SZ1->(FieldPos("Z1_FOTO")) > 0 .And. !Empty(SZ1->Z1_FOTO)
-				AAdd(aImagens, AllTrim(SZ1->Z1_FOTO))
-			EndIf
-		EndIf
-	EndIf
-
-	// Retorna objeto estruturado
-	oData := JsonObject():New()
-	oData["codigo"]       := cCodProd
-	oData["ref_id"]       := cRefId
-	oData["nome"]         := cNome
-	oData["descricao"]    := cDesc
-	oData["marca"]        := cFabric
-	oData["categoria"]    := cCategoria
-	oData["grupo"]        := cCodGrupo
-	oData["barcode"]           := cCodBar
-	oData["preco"]             := nPrecoOrig
-	oData["preco_promocional"] := nPrecoPromo
-	oData["estoque"]           := Int(Max(0, nEstoque))
-	oData["peso"]         := nPeso
-	oData["altura"]       := nAltura
-	oData["largura"]      := nLargura
-	oData["comprimento"]  := nComp
-	oData["custom_fields"]:= aCustomFlds
-	oData["imagens"]      := aImagens
-
-Return oData
+																																													Return oData
 
 /*/{Protheus.doc} ExportProduct
 Orquestra o cadastro completo do produto na Nuvemshop:
@@ -802,9 +778,12 @@ METHOD ExportProduct(cCodProd, lForce) CLASS NuvemProduto
 	Local cPrecoStr      := ""
 	Local cPrecoPromoStr := ""
 	Local cPesoStr       := ""
-	Local nCatId        := 0
-	Local cCatJson      := ""
-	Local lSuccess      := .F.
+	Local aCatIds        := {}
+	Local nCatId         := 0
+	Local nCatMarcaId    := 0
+	Local nI             := 0
+	Local cCatJson       := ""
+	Local lSuccess       := .F.
 	Local cFilEcom      := AllTrim(cValToChar(SuperGetMV("MV_NUVFIL", .F., "03150001")))
 	Local lIsB2C        := .F.
 
@@ -852,12 +831,31 @@ METHOD ExportProduct(cCodProd, lForce) CLASS NuvemProduto
 		cPrecoPromoStr := ""
 	EndIf
 
-	// Resolve Categoria na Nuvemshop
+	// Resolve Categoria do Produto e Subcategoria da Marca na Nuvemshop
+	aCatIds := {}
 	If !Empty(oProdData["categoria"])
 		nCatId := ::GetOrCreateCategory(oProdData["categoria"])
+		If nCatId > 0
+			AAdd(aCatIds, nCatId)
+		EndIf
 	EndIf
-	If nCatId > 0
-		cCatJson := '  "categories": [' + cValToChar(nCatId) + '],'
+
+	If !Empty(oProdData["marca"])
+		nCatMarcaId := ::GetCatMarca(oProdData["marca"])
+		If nCatMarcaId > 0 .And. AScan(aCatIds, nCatMarcaId) == 0
+			AAdd(aCatIds, nCatMarcaId)
+		EndIf
+	EndIf
+
+	If Len(aCatIds) > 0
+		cCatJson := '"categories": ['
+		For nI := 1 To Len(aCatIds)
+			cCatJson += cValToChar(aCatIds[nI])
+			If nI < Len(aCatIds)
+				cCatJson += ", "
+			EndIf
+		Next nI
+		cCatJson += ']'
 	EndIf
 
 	// Verifica se ja existe na Nuvemshop pelo SKU
@@ -878,7 +876,7 @@ METHOD ExportProduct(cCodProd, lForce) CLASS NuvemProduto
 		cBody += '  "description": {"pt": "' + oProdData["descricao"] + '"},'
 		cBody += '  "brand": "' + oProdData["marca"] + '"'
 		If !Empty(cCatJson)
-			cBody += ',' + cCatJson
+			cBody += ', ' + cCatJson
 		EndIf
 		cBody += '}'
 
@@ -915,11 +913,11 @@ METHOD ExportProduct(cCodProd, lForce) CLASS NuvemProduto
 		cBody += '  "name": {"pt": "' + oProdData["nome"] + '"},'
 		cBody += '  "description": {"pt": "' + oProdData["descricao"] + '"},'
 		cBody += '  "brand": "' + oProdData["marca"] + '",'
-		cBody += '  "visibility": "visible",'
+		cBody += '  "visibility": "visible"'
 		If !Empty(cCatJson)
-			cBody += cCatJson
+			cBody += ', ' + cCatJson
 		EndIf
-		cBody += '  "variants": [{'
+		cBody += ', "variants": [{'
 		cBody += '    "sku": "' + cSku + '",'
 		cBody += '    "price": "' + cPrecoStr + '",'
 		If !Empty(cPrecoPromoStr)

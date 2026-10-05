@@ -66,53 +66,82 @@ O token gerado no Partner Portal da Nuvemshop e permanente e nao expira.
 /*/
 METHOD ConfigCredentials(cFil) CLASS NuvemAcesso
 	Local cQuery    := ""
-	Local cAliasVT8 := GetNextAlias()
+	Local cAliasQry := ""
+	Local cCodVT8   := ""
 
 	Default cFil := cFilAnt
 
-	cQuery := "SELECT VT8_CODIGO, VT8_CGC, VT8_MSBLQL "
-	cQuery += " FROM " + RetSqlName("VT8") + " VT8 "
-	cQuery += " WHERE VT8.D_E_L_E_T_ = ' ' "
-	cQuery += "   AND VT8.VT8_API = 'NUVEMSHOP' "
-	cQuery += "   AND VT8.VT8_MSBLQL <> '1' "
-
-	cQuery := ChangeQuery(cQuery)
-	dbUseArea(.T., "TOPCONN", TcGenQry(,, cQuery), cAliasVT8, .F., .T.)
-
-	// 1. Parametro MV_NUVSTOR e prioritario para definir o Store ID da Nuvemshop
-	::cStoreId := AllTrim(cValToChar(SuperGetMV("MV_NUVSTOR", .F., "8117213")))
-
-	// 2. Se vazio ou zerado no parametro, tenta recuperar da tabela VT8
-	If Empty(::cStoreId) .Or. ::cStoreId == "0"
+	// 1. Tenta recuperar credenciais nas tabelas corporativas padrao da Fortbras (VT8 e VTN)
+	If ChkFile("VT8")
+		cAliasQry := GetNextAlias()
 		cQuery := "SELECT VT8_CODIGO, VT8_CGC, VT8_MSBLQL "
 		cQuery += " FROM " + RetSqlName("VT8") + " VT8 "
 		cQuery += " WHERE VT8.D_E_L_E_T_ = ' ' "
-		cQuery += "   AND VT8.VT8_API = 'NUVEMSHOP' "
+		cQuery += "   AND (VT8.VT8_API = 'NUVEMSHOP' OR VT8.VT8_CODIGO = 'NUVEMSHOP') "
 		cQuery += "   AND VT8.VT8_MSBLQL <> '1' "
-
 		cQuery := ChangeQuery(cQuery)
-		dbUseArea(.T., "TOPCONN", TcGenQry(,, cQuery), cAliasVT8, .F., .T.)
+		dbUseArea(.T., "TOPCONN", TcGenQry(,, cQuery), cAliasQry, .F., .T.)
 
-		If !(cAliasVT8)->(Eof()) .And. !Empty((cAliasVT8)->VT8_CGC)
-			::cStoreId := AllTrim((cAliasVT8)->VT8_CGC)
+		If !(cAliasQry)->(Eof())
+			cCodVT8 := AllTrim((cAliasQry)->VT8_CODIGO)
+			If !Empty((cAliasQry)->VT8_CGC)
+				::cStoreId := AllTrim((cAliasQry)->VT8_CGC)
+			EndIf
 		EndIf
-		(cAliasVT8)->(dbCloseArea())
+		(cAliasQry)->(dbCloseArea())
 	EndIf
 
-	// 3. Fallback definitivo se ainda vazio: Store ID 8117213 (demofortbras)
+	// Leitura do Cadastro de Ambientes / Credenciais (VTN) apenas se os campos customizados existirem
+	If !Empty(cCodVT8) .And. ChkFile("VTN")
+		DbSelectArea("VTN")
+		If VTN->(FieldPos("VTN_TOKEN")) > 0 .Or. VTN->(FieldPos("VTN_STORE")) > 0
+			cAliasQry := GetNextAlias()
+			cQuery := "SELECT * "
+			cQuery += " FROM " + RetSqlName("VTN") + " VTN "
+			cQuery += " WHERE VTN.D_E_L_E_T_ = ' ' "
+			cQuery += "   AND VTN.VTN_CODVT8 = '" + cCodVT8 + "' "
+			cQuery += "   AND (VTN.VTN_FILIAL = '" + cFil + "' OR VTN.VTN_FILIAL = '" + xFilial("VTN") + "' OR VTN.VTN_FILIAL = ' ') "
+			cQuery := ChangeQuery(cQuery)
+			dbUseArea(.T., "TOPCONN", TcGenQry(,, cQuery), cAliasQry, .F., .T.)
+
+			If !(cAliasQry)->(Eof())
+				If (cAliasQry)->(FieldPos("VTN_TOKEN")) > 0 .And. !Empty((cAliasQry)->VTN_TOKEN)
+					::cAccessToken := AllTrim((cAliasQry)->VTN_TOKEN)
+				EndIf
+				If (cAliasQry)->(FieldPos("VTN_APPID")) > 0 .And. !Empty((cAliasQry)->VTN_APPID)
+					::cAppId := AllTrim((cAliasQry)->VTN_APPID)
+				EndIf
+				If (cAliasQry)->(FieldPos("VTN_STORE")) > 0 .And. !Empty((cAliasQry)->VTN_STORE)
+					::cStoreId := AllTrim((cAliasQry)->VTN_STORE)
+				EndIf
+			EndIf
+			(cAliasQry)->(dbCloseArea())
+		EndIf
+	EndIf
+
+	// 2. Fallback para Parametros SX6 (caso ainda nao cadastrado no VT8/VTN)
+	If Empty(::cStoreId) .Or. ::cStoreId == "0"
+		::cStoreId := AllTrim(cValToChar(SuperGetMV("MV_NUVSTOR", .F., "8117213")))
+	EndIf
 	If Empty(::cStoreId) .Or. ::cStoreId == "0"
 		::cStoreId := "8117213"
 	EndIf
 
-	// Recupera App ID, Access Token e User-Agent via parametros SuperGetMV
-	::cAppId := AllTrim(cValToChar(SuperGetMV("MV_NUVAPP", .F., "9876")))
+	If Empty(::cAppId)
+		::cAppId := AllTrim(cValToChar(SuperGetMV("MV_NUVAPP", .F., "9876")))
+	EndIf
 	If Empty(::cAppId)
 		::cAppId := "9876"
 	EndIf
 
-	::cAccessToken := AllTrim(cValToChar(SuperGetMV("MV_NUVTOK", .F., "44ffe7a14117c3bdde82906080a810f477c6368d")))
 	If Empty(::cAccessToken)
-		::cAccessToken := "44ffe7a14117c3bdde82906080a810f477c6368d"
+		::cAccessToken := AllTrim(cValToChar(SuperGetMV("MV_NUVTOK", .F., "f9255da9858fc4c00eb3c5a4078a6c86cc918e85")))
+	EndIf
+
+	// Auto-recuperacao: caso o SX6 esteja com o token legado de produtos (44ffe7a1...) sem escopo de pedidos
+	If ::cAccessToken == "44ffe7a14117c3bdde82906080a810f477c6368d"
+		::cAccessToken := "f9255da9858fc4c00eb3c5a4078a6c86cc918e85"
+		PutMV("MV_NUVTOK", ::cAccessToken)
 	EndIf
 
 	// Header User-Agent e OBRIGATORIO na Nuvemshop sob pena de retorno HTTP 400 Bad Request
@@ -129,7 +158,7 @@ METHOD ConfigCredentials(cFil) CLASS NuvemAcesso
 	// URL base final direcionada para a loja na versao UNSTABLE (necessaria para Custom Objects e Custom Fields)
 	::cURLBase := "https://api.nuvemshop.com.br/unstable/" + ::cStoreId
 
-	ConOut("[NUVEMSHOP][CONFIG] Store ID: " + ::cStoreId + " | User-Agent: " + ::cUserAgent)
+	ConOut("[NUVEMSHOP][CONFIG] Store ID: " + ::cStoreId + " | User-Agent: " + ::cUserAgent + " | Origem: " + Iif(!Empty(cCodVT8), "Tabela VT8/VTN", "Parametros SX6"))
 Return .T.
 
 /*/{Protheus.doc} ExecuteRest
@@ -146,6 +175,9 @@ METHOD ExecuteRest(cPath, cMethod, cBody, aCustomHeaders) CLASS NuvemAcesso
 	Local nMaxRetry   := 3
 	Local nWaitReset  := 0
 	Local nI          := 0
+	Local cHeaderRet  := ""
+	Local cResponse   := ""
+	Local nPosHttp    := 0
 
 	Default cMethod       := "GET"
 	Default cBody         := ""
@@ -197,6 +229,42 @@ METHOD ExecuteRest(cPath, cMethod, cBody, aCustomHeaders) CLASS NuvemAcesso
 		::nLastStatus := Val(oRest:GetHTTPCode())
 		::cLastResult := oRest:GetResult()
 
+		If ::cLastResult == Nil
+			::cLastResult := ""
+		EndIf
+
+		// Fallback para funcoes nativas HTTPSGet/HTTPSPost/HTTPSQuote (usadas pelo Protheus da Fortbras no xSantander)
+		// Caso o FWRest falhe com status 0 por handshake SSL ou restricao de biblioteca interna no AppServer
+		If ::nLastStatus == 0 .Or. Empty(::cLastResult)
+			cHeaderRet := ""
+			cResponse  := ""
+			Do Case
+			Case Upper(cMethod) == "GET"
+				cResponse := HTTPSGet(cFullURL, "", "", "", "", 30, aHeaders, @cHeaderRet, .F.)
+			Case Upper(cMethod) == "POST"
+				cResponse := HTTPSPost(cFullURL, "", "", "", "", cBody, 30, aHeaders, @cHeaderRet, .F.)
+			OtherWise
+				cResponse := HTTPSQuote(cFullURL, "", "", "", Upper(cMethod), "", cBody, 30, aHeaders, @cHeaderRet)
+			EndCase
+
+			If !Empty(cHeaderRet)
+				If "HTTP/" $ Upper(cHeaderRet)
+					nPosHttp := At("HTTP/", Upper(cHeaderRet))
+					::nLastStatus := Val(SubStr(cHeaderRet, nPosHttp + 9, 3))
+				EndIf
+				If !Empty(cResponse)
+					::cLastResult := cResponse
+				EndIf
+				If ::nLastStatus >= 200 .And. ::nLastStatus < 300
+					lSuccess := .T.
+				EndIf
+			EndIf
+		EndIf
+
+		If Empty(::cLastResult) .And. !Empty(oRest:GetLastError())
+			::cLastResult := "Erro FWRest: " + oRest:GetLastError()
+		EndIf
+
 		ConOut("[NUVEMSHOP REST] " + cMethod + " " + cFullPath + " -> HTTP Status: " + cValToChar(::nLastStatus))
 		If ::nLastStatus < 200 .Or. ::nLastStatus >= 300
 			ConOut("[NUVEMSHOP ERRO RETORNO] " + SubStr(::cLastResult, 1, 300))
@@ -222,7 +290,7 @@ METHOD ExecuteRest(cPath, cMethod, cBody, aCustomHeaders) CLASS NuvemAcesso
 			Sleep(::nRateLimitWait)
 		Else
 			// Erro de requisicao (ex.: 404, 400, 422, 500)
-			AAdd(::aMsgErro, "Erro Nuvemshop [" + cValToChar(::nLastStatus) + "]: " + ::cLastResult)
+			AAdd(::aMsgErro, "Erro Nuvemshop [" + cValToChar(::nLastStatus) + "]: " + cValToChar(::cLastResult))
 			Exit
 		EndIf
 
