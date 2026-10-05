@@ -515,9 +515,9 @@ User Function NUVPED(cIdPedido)
 
 	ConOut("[NUVEMSHOP] Iniciando consulta/importacao manual do pedido: " + cIdPedido + " na Filial: " + cFilAnt)
 
-	// Garante o Token Mestre com escopo de leitura e gravacao de pedidos (read_orders)
-	If Empty(oNuvPed:cAccessToken) .Or. oNuvPed:cAccessToken == "44ffe7a14117c3bdde82906080a810f477c6368d"
-		oNuvPed:cAccessToken := "f9255da9858fc4c00eb3c5a4078a6c86cc918e85"
+	// Garante o Token Mestre com escopo de leitura e gravacao de pedidos (read_orders/write_orders)
+	If Empty(oNuvPed:cAccessToken) .Or. oNuvPed:cAccessToken == "44ffe7a14117c3bdde82906080a810f477c6368d" .Or. oNuvPed:cAccessToken == "f9255da9858fc4c00eb3c5a4078a6c86cc918e85"
+		oNuvPed:cAccessToken := "1637dd9821cec89241d671a7307f6001c5450eb5"
 		PutMV("MV_NUVTOK", oNuvPed:cAccessToken)
 	EndIf
 

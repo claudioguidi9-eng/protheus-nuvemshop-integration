@@ -84,7 +84,8 @@ METHOD ConfigCredentials(cFil) CLASS NuvemAcesso
 
 		If !(cAliasQry)->(Eof())
 			cCodVT8 := AllTrim((cAliasQry)->VT8_CODIGO)
-			If !Empty((cAliasQry)->VT8_CGC)
+			// Se o VT8_CGC tiver ate 10 digitos, e o proprio Store ID. Se for CNPJ (14 digitos), busca do MV_NUVSTOR
+			If !Empty((cAliasQry)->VT8_CGC) .And. Len(AllTrim((cAliasQry)->VT8_CGC)) <= 10
 				::cStoreId := AllTrim((cAliasQry)->VT8_CGC)
 			EndIf
 		EndIf
@@ -111,7 +112,7 @@ METHOD ConfigCredentials(cFil) CLASS NuvemAcesso
 				If (cAliasQry)->(FieldPos("VTN_APPID")) > 0 .And. !Empty((cAliasQry)->VTN_APPID)
 					::cAppId := AllTrim((cAliasQry)->VTN_APPID)
 				EndIf
-				If (cAliasQry)->(FieldPos("VTN_STORE")) > 0 .And. !Empty((cAliasQry)->VTN_STORE)
+				If (cAliasQry)->(FieldPos("VTN_STORE")) > 0 .And. !Empty((cAliasQry)->VTN_STORE) .And. Len(AllTrim((cAliasQry)->VTN_STORE)) <= 10
 					::cStoreId := AllTrim((cAliasQry)->VTN_STORE)
 				EndIf
 			EndIf
@@ -120,10 +121,10 @@ METHOD ConfigCredentials(cFil) CLASS NuvemAcesso
 	EndIf
 
 	// 2. Fallback para Parametros SX6 (caso ainda nao cadastrado no VT8/VTN)
-	If Empty(::cStoreId) .Or. ::cStoreId == "0"
+	If Empty(::cStoreId) .Or. ::cStoreId == "0" .Or. Len(::cStoreId) > 10
 		::cStoreId := AllTrim(cValToChar(SuperGetMV("MV_NUVSTOR", .F., "8117213")))
 	EndIf
-	If Empty(::cStoreId) .Or. ::cStoreId == "0"
+	If Empty(::cStoreId) .Or. ::cStoreId == "0" .Or. Len(::cStoreId) > 10
 		::cStoreId := "8117213"
 	EndIf
 
@@ -135,12 +136,12 @@ METHOD ConfigCredentials(cFil) CLASS NuvemAcesso
 	EndIf
 
 	If Empty(::cAccessToken)
-		::cAccessToken := AllTrim(cValToChar(SuperGetMV("MV_NUVTOK", .F., "f9255da9858fc4c00eb3c5a4078a6c86cc918e85")))
+		::cAccessToken := AllTrim(cValToChar(SuperGetMV("MV_NUVTOK", .F., "1637dd9821cec89241d671a7307f6001c5450eb5")))
 	EndIf
 
-	// Auto-recuperacao: caso o SX6 esteja com o token legado de produtos (44ffe7a1...) sem escopo de pedidos
-	If ::cAccessToken == "44ffe7a14117c3bdde82906080a810f477c6368d"
-		::cAccessToken := "f9255da9858fc4c00eb3c5a4078a6c86cc918e85"
+	// Auto-recuperacao: caso o SX6 esteja com os tokens legados (44ffe7a1... ou f9255da9...)
+	If Empty(::cAccessToken) .Or. ::cAccessToken == "44ffe7a14117c3bdde82906080a810f477c6368d" .Or. ::cAccessToken == "f9255da9858fc4c00eb3c5a4078a6c86cc918e85"
+		::cAccessToken := "1637dd9821cec89241d671a7307f6001c5450eb5"
 		PutMV("MV_NUVTOK", ::cAccessToken)
 	EndIf
 
