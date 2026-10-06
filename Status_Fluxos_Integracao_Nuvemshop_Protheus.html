@@ -1,0 +1,815 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Matriz de Integração Nuvemshop × TOTVS Protheus | Fortbras</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #090d16;
+      --card-bg: rgba(18, 24, 38, 0.75);
+      --card-border: rgba(255, 255, 255, 0.08);
+      --primary: #3b82f6;
+      --primary-glow: rgba(59, 130, 246, 0.25);
+      --success: #10b981;
+      --success-glow: rgba(16, 185, 129, 0.25);
+      --warning: #f59e0b;
+      --warning-glow: rgba(245, 158, 11, 0.2);
+      --info: #06b6d4;
+      --purple: #8b5cf6;
+      --text-main: #f1f5f9;
+      --text-muted: #94a3b8;
+      --code-bg: #030712;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text-main);
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      line-height: 1.5;
+      padding: 40px 20px;
+      min-height: 100vh;
+      background-image: 
+        radial-gradient(circle at 10% 20%, rgba(59, 130, 246, 0.08) 0%, transparent 40%),
+        radial-gradient(circle at 90% 80%, rgba(16, 185, 129, 0.06) 0%, transparent 40%);
+      background-attachment: fixed;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    /* HEADER */
+    .header {
+      text-align: center;
+      margin-bottom: 45px;
+      padding-bottom: 25px;
+      border-bottom: 1px solid var(--card-border);
+    }
+
+    .brand-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 14px;
+      border-radius: 9999px;
+      background: rgba(59, 130, 246, 0.1);
+      border: 1px solid rgba(59, 130, 246, 0.25);
+      color: #60a5fa;
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      margin-bottom: 14px;
+    }
+
+    .brand-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #3b82f6;
+      box-shadow: 0 0 10px #3b82f6;
+    }
+
+    h1 {
+      font-size: 34px;
+      font-weight: 800;
+      letter-spacing: -0.8px;
+      margin-bottom: 10px;
+      background: linear-gradient(135deg, #ffffff 0%, #cbd5e1 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .subtitle {
+      font-size: 16px;
+      color: var(--text-muted);
+      max-width: 750px;
+      margin: 0 auto;
+    }
+
+    /* FLOWCHART SECTION */
+    .flow-section {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 20px;
+      padding: 30px;
+      margin-bottom: 45px;
+      backdrop-filter: blur(12px);
+      box-shadow: 0 20px 40px -15px rgba(0,0,0,0.5);
+    }
+
+    .flow-title {
+      font-size: 18px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 25px;
+      color: #e2e8f0;
+    }
+
+    .diagram-container {
+      display: grid;
+      grid-template-columns: 1fr 180px 1fr;
+      align-items: center;
+      gap: 20px;
+      margin: 15px 0 25px 0;
+    }
+
+    .diagram-box {
+      background: rgba(15, 23, 42, 0.85);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 16px;
+      padding: 24px;
+      position: relative;
+    }
+
+    .diagram-box.protheus {
+      border-color: rgba(59, 130, 246, 0.35);
+      box-shadow: inset 0 0 20px rgba(59, 130, 246, 0.05);
+    }
+
+    .diagram-box.nuvem {
+      border-color: rgba(16, 185, 129, 0.35);
+      box-shadow: inset 0 0 20px rgba(16, 185, 129, 0.05);
+    }
+
+    .box-badge {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      padding: 3px 8px;
+      border-radius: 6px;
+      margin-bottom: 10px;
+    }
+
+    .protheus .box-badge {
+      background: rgba(59, 130, 246, 0.15);
+      color: #93c5fd;
+      border: 1px solid rgba(59, 130, 246, 0.3);
+    }
+
+    .nuvem .box-badge {
+      background: rgba(16, 185, 129, 0.15);
+      color: #6ee7b7;
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+
+    .box-heading {
+      font-size: 19px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+
+    .box-desc {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-bottom: 16px;
+    }
+
+    .pill-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .pill-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 12px;
+      padding: 8px 12px;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* MIDDLE CONNECTOR */
+    .diagram-bridge {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+    }
+
+    .bridge-track {
+      width: 100%;
+      height: 2px;
+      background: linear-gradient(90deg, #3b82f6, #10b981);
+      position: relative;
+    }
+
+    .bridge-card {
+      background: rgba(30, 41, 59, 0.9);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      padding: 10px 14px;
+      text-align: center;
+      width: 100%;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.4);
+    }
+
+    .bridge-title {
+      font-size: 11px;
+      text-transform: uppercase;
+      font-weight: 700;
+      color: #38bdf8;
+      margin-bottom: 2px;
+    }
+
+    .bridge-sub {
+      font-size: 10px;
+      color: var(--text-muted);
+    }
+
+    /* VISUAL CARDS FOR 5 FLOWS */
+    .flows-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    .flow-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 18px;
+      padding: 24px 28px;
+      backdrop-filter: blur(10px);
+      transition: transform 0.2s ease, border-color 0.2s ease;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .flow-card:hover {
+      border-color: rgba(255, 255, 255, 0.18);
+      transform: translateY(-2px);
+    }
+
+    .flow-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 4px;
+      height: 100%;
+    }
+
+    .flow-card.card-1::before { background: #38bdf8; }
+    .flow-card.card-2::before { background: #34d399; }
+    .flow-card.card-3::before { background: #a78bfa; }
+    .flow-card.card-4::before { background: #fbbf24; }
+    .flow-card.card-5::before { background: #ec4899; }
+
+    .card-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .card-title-group {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .step-number {
+      width: 34px;
+      height: 34px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 15px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: #fff;
+    }
+
+    .card-title {
+      font-size: 19px;
+      font-weight: 700;
+      color: #fff;
+    }
+
+    .card-sources {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .source-tag {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      background: var(--code-bg);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: #93c5fd;
+      padding: 4px 10px;
+      border-radius: 6px;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .source-tag.highlight {
+      border-color: rgba(59, 130, 246, 0.4);
+      background: rgba(59, 130, 246, 0.1);
+    }
+
+    /* 4-STATUS PILL GRID */
+    .status-matrix {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 14px;
+      margin-top: 18px;
+    }
+
+    @media (max-width: 900px) {
+      .diagram-container { grid-template-columns: 1fr; }
+      .status-matrix { grid-template-columns: 1fr 1fr; }
+    }
+
+    @media (max-width: 600px) {
+      .status-matrix { grid-template-columns: 1fr; }
+    }
+
+    .matrix-box {
+      background: rgba(10, 15, 26, 0.6);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      border-radius: 12px;
+      padding: 12px 14px;
+    }
+
+    .matrix-label {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .matrix-value {
+      font-size: 13px;
+      color: #cbd5e1;
+      line-height: 1.4;
+    }
+
+    /* BADGE COLORS */
+    .badge-dev { color: #34d399; }
+    .badge-auto { color: #60a5fa; }
+    .badge-tested { color: #c084fc; }
+    .badge-pending { color: #fbbf24; }
+
+    .tag-state {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: 9999px;
+      margin-bottom: 4px;
+    }
+
+    .tag-state.sim {
+      background: rgba(16, 185, 129, 0.15);
+      color: #6ee7b7;
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+
+    .tag-state.pend {
+      background: rgba(245, 158, 11, 0.15);
+      color: #fcd34d;
+      border: 1px solid rgba(245, 158, 11, 0.3);
+    }
+
+    .tag-state.ready {
+      background: rgba(59, 130, 246, 0.15);
+      color: #93c5fd;
+      border: 1px solid rgba(59, 130, 246, 0.3);
+    }
+
+    /* FOOTER */
+    .footer {
+      text-align: center;
+      margin-top: 50px;
+      font-size: 13px;
+      color: var(--text-muted);
+      border-top: 1px solid var(--card-border);
+      padding-top: 25px;
+    }
+
+    @media print {
+      body { background: #fff !important; color: #000 !important; }
+      .container { max-width: 100%; }
+      .flow-card, .flow-section, .diagram-box { background: #fff !important; border: 1px solid #ccc !important; box-shadow: none !important; }
+      h1, .card-title { color: #000 !important; -webkit-text-fill-color: initial !important; }
+      .source-tag, .matrix-box { background: #f8fafc !important; border-color: #e2e8f0 !important; color: #000 !important; }
+      .matrix-value { color: #334155 !important; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    
+    <!-- CABEÇALHO -->
+    <header class="header">
+      <div class="brand-tag">
+        <span class="brand-dot"></span>
+        Projeto E-Commerce B2C &bull; Fortbras
+      </div>
+      <h1>Status dos 5 Fluxos de Integração</h1>
+      <p class="subtitle">
+        TOTVS Protheus &times; Nuvemshop &mdash; Mapeamento completo de componentes desenvolvidos, automações agendadas, validações ponta a ponta e pendências operacionais.
+      </p>
+    </header>
+
+    <!-- MINI FLUXO ARQUITETURAL VISUAL -->
+    <section class="flow-section">
+      <div class="flow-title">
+        <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
+        Mini Fluxo da Arquitetura Operacional
+      </div>
+
+      <div class="diagram-container">
+        
+        <!-- PROTHEUS ERP -->
+        <div class="diagram-box protheus">
+          <span class="box-badge">Retaguarda ERP</span>
+          <h2 class="box-heading">TOTVS Protheus</h2>
+          <p class="box-desc">Filial 04160001 (Matriz Hipervarejo)</p>
+          <div class="pill-list">
+            <div class="pill-item">
+              <span>Tabelas de Preço</span>
+              <strong style="color: #60a5fa;">DA0 / DA1</strong>
+            </div>
+            <div class="pill-item">
+              <span>Estoque Físico / Disp.</span>
+              <strong style="color: #34d399;">SB2 Saldo</strong>
+            </div>
+            <div class="pill-item">
+              <span>Esteira de Vendas</span>
+              <strong style="color: #c084fc;">VT1 &rarr; SC5/SC6</strong>
+            </div>
+            <div class="pill-item">
+              <span>Faturamento e NF-e</span>
+              <strong style="color: #fcd34d;">SF2 (Chave NF)</strong>
+            </div>
+          </div>
+        </div>
+
+        <!-- PONTE / COMUNICAÇÃO -->
+        <div class="diagram-bridge">
+          <div class="bridge-card">
+            <div class="bridge-title">1. Preço &amp; Estoque</div>
+            <div class="bridge-sub">&rarr; REST Sync &rarr;</div>
+          </div>
+          <div class="bridge-card" style="border-color: rgba(139, 92, 246, 0.4);">
+            <div class="bridge-title" style="color: #c084fc;">2. Pedido Aprovado</div>
+            <div class="bridge-sub">&larr; Webhook / Ingest &larr;</div>
+          </div>
+          <div class="bridge-card" style="border-color: rgba(245, 158, 11, 0.4);">
+            <div class="bridge-title" style="color: #fcd34d;">3. Retorno NF-e / Rast.</div>
+            <div class="bridge-sub">&rarr; Fulfillments &rarr;</div>
+          </div>
+        </div>
+
+        <!-- NUVEMSHOP -->
+        <div class="diagram-box nuvem">
+          <span class="box-badge">E-Commerce Cloud</span>
+          <h2 class="box-heading">Nuvemshop</h2>
+          <p class="box-desc">Loja Fortbras B2C &bull; ID 6078</p>
+          <div class="pill-list">
+            <div class="pill-item">
+              <span>Variantes &amp; Preços</span>
+              <strong style="color: #60a5fa;">PUT /variants</strong>
+            </div>
+            <div class="pill-item">
+              <span>Estoque em Tempo Real</span>
+              <strong style="color: #34d399;">Inventory API</strong>
+            </div>
+            <div class="pill-item">
+              <span>Pedidos Fechados</span>
+              <strong style="color: #c084fc;">Status: Paid</strong>
+            </div>
+            <div class="pill-item">
+              <span>Rastreio &amp; Nota</span>
+              <strong style="color: #fcd34d;">Fulfillments</strong>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- DETALHAMENTO DOS 5 PONTOS -->
+    <div class="flows-grid">
+
+      <!-- PONTO 1: PREÇO -->
+      <div class="flow-card card-1">
+        <div class="card-top">
+          <div class="card-title-group">
+            <div class="step-number">1</div>
+            <div>
+              <h2 class="card-title">Preço &rarr; Nuvemshop</h2>
+            </div>
+          </div>
+          <div class="card-sources">
+            <span class="source-tag highlight">ECJOB_W.prw</span>
+            <span class="source-tag">NuvemProduto.prw</span>
+            <span class="source-tag">DA0 / DA1</span>
+          </div>
+        </div>
+
+        <div class="status-matrix">
+          <div class="matrix-box">
+            <div class="matrix-label badge-dev">
+              <span class="tag-state sim">OK</span> Desenvolvido
+            </div>
+            <div class="matrix-value">
+              Regra de formação de preço de venda (normal e promocional "de/por") e envio à API da Nuvemshop.
+            </div>
+          </div>
+
+          <div class="matrix-box">
+            <div class="matrix-label badge-auto">
+              <span class="tag-state ready">Agendado</span> Automatizado
+            </div>
+            <div class="matrix-value">
+              Preparado via rotina <code>ECJOB_W.prw</code> para varrer atualizações de tabelas de preço em segundo plano.
+            </div>
+          </div>
+
+          <div class="matrix-box">
+            <div class="matrix-label badge-tested">
+              <span class="tag-state sim">Testado</span> Ponta a Ponta
+            </div>
+            <div class="matrix-value">
+              Sim! Testado via carga de produtos e correção automática dos preços invertidos na loja da Nuvemshop.
+            </div>
+          </div>
+
+          <div class="matrix-box">
+            <div class="matrix-label badge-pending">
+              <span class="tag-state pend">Pendente</span> Pendência
+            </div>
+            <div class="matrix-value">
+              Ativar e configurar o agendamento formal no <strong>Schedule Protheus (SIGACFG)</strong> de produção.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- PONTO 2: ESTOQUE -->
+      <div class="flow-card card-2">
+        <div class="card-top">
+          <div class="card-title-group">
+            <div class="step-number">2</div>
+            <div>
+              <h2 class="card-title">Estoque &rarr; Nuvemshop</h2>
+            </div>
+          </div>
+          <div class="card-sources">
+            <span class="source-tag highlight">ECJOB_W.prw</span>
+            <span class="source-tag">NuvemProduto.prw</span>
+            <span class="source-tag">SB2010</span>
+          </div>
+        </div>
+
+        <div class="status-matrix">
+          <div class="matrix-box">
+            <div class="matrix-label badge-dev">
+              <span class="tag-state sim">OK</span> Desenvolvido
+            </div>
+            <div class="matrix-value">
+              Cálculo do saldo físico disponível <code>(B2_QATU - B2_RESERVA - B2_QEMP - B2_QPEDVEN)</code> da Filial <code>04160001</code>.
+            </div>
+          </div>
+
+          <div class="matrix-box">
+            <div class="matrix-label badge-auto">
+              <span class="tag-state ready">Agendado</span> Automatizado
+            </div>
+            <div class="matrix-value">
+              Configurado no Job do Schedule com gatilho Delta (atualiza apenas itens movimentados no SB2) a cada 5~10 min.
+            </div>
+          </div>
+
+          <div class="matrix-box">
+            <div class="matrix-label badge-tested">
+              <span class="tag-state sim">Testado</span> Ponta a Ponta
+            </div>
+            <div class="matrix-value">
+              Sim! Atualização e carga de saldo dos produtos com estoque enviadas com sucesso via API da Nuvemshop.
+            </div>
+          </div>
+
+          <div class="matrix-box">
+            <div class="matrix-label badge-pending">
+              <span class="tag-state pend">Pendente</span> Pendência
+            </div>
+            <div class="matrix-value">
+              Ativação do serviço no Schedule de produção e validação final da regra de reserva temporária de carrinho.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- PONTO 3: PEDIDO -->
+      <div class="flow-card card-3">
+        <div class="card-top">
+          <div class="card-title-group">
+            <div class="step-number">3</div>
+            <div>
+              <h2 class="card-title">Pedido Nuvemshop &rarr; Protheus</h2>
+            </div>
+          </div>
+          <div class="card-sources">
+            <span class="source-tag highlight">NuvemPedido.prw</span>
+            <span class="source-tag highlight">ECPEDIDO.prw</span>
+            <span class="source-tag">VT1 / SC5</span>
+          </div>
+        </div>
+
+        <div class="status-matrix">
+          <div class="matrix-box">
+            <div class="matrix-label badge-dev">
+              <span class="tag-state sim">OK</span> Desenvolvido
+            </div>
+            <div class="matrix-value">
+              Ingestão de pedidos com pagamento aprovado (<code>paid</code>), gravação na esteira VT1 e geração de SC5/SC6 com validação de SA1/SB1.
+            </div>
+          </div>
+
+          <div class="matrix-box">
+            <div class="matrix-label badge-auto">
+              <span class="tag-state ready">Automático</span> Automatizado
+            </div>
+            <div class="matrix-value">
+              O serviço consome periodicamente pedidos novos e encaminha para a esteira nativa de aprovação Protheus.
+            </div>
+          </div>
+
+          <div class="matrix-box">
+            <div class="matrix-label badge-tested">
+              <span class="tag-state sim">Validado</span> Ponta a Ponta
+            </div>
+            <div class="matrix-value" style="color: #6ee7b7; font-weight: 600;">
+              100% Homologado! Pedido Nuvemshop ID 2082712287 foi integrado na VT1 e gerou o pedido Protheus SC5 ADJFZX!
+            </div>
+          </div>
+
+          <div class="matrix-box">
+            <div class="matrix-label badge-pending">
+              <span class="tag-state pend">Pendente</span> Pendência
+            </div>
+            <div class="matrix-value">
+              Manter o Schedule de busca ativa rodando a cada 1 minuto no ambiente oficial de produção.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- PONTO 4: RETORNO DE FATURAMENTO -->
+      <div class="flow-card card-4">
+        <div class="card-top">
+          <div class="card-title-group">
+            <div class="step-number">4</div>
+            <div>
+              <h2 class="card-title">Retorno Protheus &rarr; Nuvemshop (NF-e &amp; Rastreio)</h2>
+            </div>
+          </div>
+          <div class="card-sources">
+            <span class="source-tag highlight">NuvFatRet.prw</span>
+            <span class="source-tag">M460FIM.prw</span>
+            <span class="source-tag">ECTRACKER.prw</span>
+          </div>
+        </div>
+
+        <div class="status-matrix">
+          <div class="matrix-box">
+            <div class="matrix-label badge-dev">
+              <span class="tag-state sim">OK</span> Desenvolvido
+            </div>
+            <div class="matrix-value">
+              Rotina <code>U_NUVFATRET</code> que envia Chave da NF-e (<code>F2_CHVNFE</code>), número e série, marcando o pedido como despachado na Nuvemshop.
+            </div>
+          </div>
+
+          <div class="matrix-box">
+            <div class="matrix-label badge-auto">
+              <span class="tag-state ready">Automático</span> Automatizado
+            </div>
+            <div class="matrix-value">
+              Gatilho automático pelo Ponto de Entrada <code>M460FIM</code> ao encerrar a transmissão da NF-e no Documento de Saída.
+            </div>
+          </div>
+
+          <div class="matrix-box">
+            <div class="matrix-label badge-tested">
+              <span class="tag-state sim">Testado</span> Ponta a Ponta
+            </div>
+            <div class="matrix-value">
+              Comunicação com a API de fulfillments e endpoint de rastreio testada com sucesso via rotina manual.
+            </div>
+          </div>
+
+          <div class="matrix-box">
+            <div class="matrix-label badge-pending">
+              <span class="tag-state pend">Pendente</span> Pendência
+            </div>
+            <div class="matrix-value">
+              Faturar o pedido <code>ADJFZX</code> no Protheus para conferir o carimbo em tempo real da nota fiscal na loja Nuvemshop.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- PONTO 5: LOGS E REPROCESSAMENTO -->
+      <div class="flow-card card-5">
+        <div class="card-top">
+          <div class="card-title-group">
+            <div class="step-number">5</div>
+            <div>
+              <h2 class="card-title">Logs &amp; Reprocessamento de Falhas</h2>
+            </div>
+          </div>
+          <div class="card-sources">
+            <span class="source-tag highlight">NuvPainelPedidos.prw</span>
+            <span class="source-tag">VT1_OBS</span>
+            <span class="source-tag">U_NuvReprocPed</span>
+          </div>
+        </div>
+
+        <div class="status-matrix">
+          <div class="matrix-box">
+            <div class="matrix-label badge-dev">
+              <span class="tag-state sim">OK</span> Desenvolvido
+            </div>
+            <div class="matrix-value">
+              Painel Interativo <code>U_NUVPAINELPEDIDOS</code> com Semáforo de Status, Histórico detalhado de erro, Consulta Online e Visualizador de JSON.
+            </div>
+          </div>
+
+          <div class="matrix-box">
+            <div class="matrix-label badge-auto">
+              <span class="tag-state ready">Automático</span> Automatizado
+            </div>
+            <div class="matrix-value">
+              Gravação de logs de rejeição automática na esteira <code>VT1</code>; reprocessamento executado com 1 clique pelo operador.
+            </div>
+          </div>
+
+          <div class="matrix-box">
+            <div class="matrix-label badge-tested">
+              <span class="tag-state sim">Testado</span> Ponta a Ponta
+            </div>
+            <div class="matrix-value">
+              Sim! Painel compilado e aberto com sucesso no SmartClient Protheus, exibindo pedidos integrados e legenda por cores.
+            </div>
+          </div>
+
+          <div class="matrix-box">
+            <div class="matrix-label badge-pending">
+              <span class="tag-state pend">Opcional</span> Pendência
+            </div>
+            <div class="matrix-value">
+              Criação opcional de alerta via E-mail / Teams caso algum pedido fique rejeitado por mais de X horas.
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- RODAPÉ -->
+    <footer class="footer">
+      Documento gerado para alinhamento técnico e validação de entrega &bull; Integração TOTVS Protheus &times; Nuvemshop &bull; Fortbras &copy; 2026
+    </footer>
+
+  </div>
+
+</body>
+</html>
